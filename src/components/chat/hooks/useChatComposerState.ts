@@ -130,6 +130,16 @@ export function useChatComposerState({
     ((event: FormEvent<HTMLFormElement> | MouseEvent | TouchEvent | KeyboardEvent<HTMLTextAreaElement>) => Promise<void>) | null
   >(null);
   const inputValueRef = useRef(input);
+  const abortTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (abortTimeoutRef.current) {
+        clearTimeout(abortTimeoutRef.current);
+        abortTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const handleBuiltInCommand = useCallback(
     (result: CommandExecutionResult) => {
@@ -547,6 +557,10 @@ export function useChatComposerState({
       };
 
       setChatMessages((previous) => [...previous, userMessage]);
+      if (abortTimeoutRef.current) {
+        clearTimeout(abortTimeoutRef.current);
+        abortTimeoutRef.current = null;
+      }
       setIsLoading(true);
       setCanAbortSession(true);
       setClaudeStatus({
@@ -833,17 +847,6 @@ export function useChatComposerState({
     }
     setIsTextareaExpanded(false);
   }, [resetCommandMenuState]);
-
-  const abortTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (abortTimeoutRef.current) {
-        clearTimeout(abortTimeoutRef.current);
-        abortTimeoutRef.current = null;
-      }
-    };
-  }, []);
 
   const handleAbortSession = useCallback(() => {
     if (!canAbortSession) {
