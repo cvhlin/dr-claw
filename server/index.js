@@ -48,6 +48,7 @@ import { getProjects, getSessions, getSessionMessages, renameProject, deleteSess
 import { queryClaudeSDK, abortClaudeSDKSession, isClaudeSDKSessionActive, getActiveClaudeSDKSessions, resolveToolApproval } from './claude-sdk.js';
 import { spawnCursor, abortCursorSession, isCursorSessionActive, getActiveCursorSessions } from './cursor-cli.js';
 import { queryCodex, abortCodexSession, isCodexSessionActive, getActiveCodexSessions } from './openai-codex.js';
+import { spawnGemini, abortGeminiSession, isGeminiSessionActive, getActiveGeminiSessions } from './gemini-cli.js';
 import gitRoutes from './routes/git.js';
 import authRoutes from './routes/auth.js';
 import mcpRoutes from './routes/mcp.js';
@@ -68,13 +69,14 @@ import { initializeDatabase } from './database/db.js';
 import { validateApiKey, authenticateToken, authenticateWebSocket } from './middleware/auth.js';
 import { IS_PLATFORM } from './constants/config.js';
 import { enqueueTelemetryEvent } from './telemetry.js';
-import { resolveCursorCliCommand, isCursorLoginCommand, normalizeCursorLoginCommand } from './utils/cursorCommand.js';
+import { resolveCursorCliCommand, isCursorLoginCommand, isGeminiLoginCommand, normalizeCursorLoginCommand } from './utils/cursorCommand.js';
 
 // File system watchers for provider project/session folders
 const PROVIDER_WATCH_PATHS = [
     { provider: 'claude', rootPath: path.join(os.homedir(), '.claude', 'projects') },
     { provider: 'cursor', rootPath: path.join(os.homedir(), '.cursor', 'chats') },
-    { provider: 'codex', rootPath: path.join(os.homedir(), '.codex', 'sessions') }
+    { provider: 'codex', rootPath: path.join(os.homedir(), '.codex', 'sessions') },
+    { provider: 'gemini', rootPath: path.join(os.homedir(), '.gemini', 'sessions') }
 ];
 const WATCHER_IGNORED_PATTERNS = [
     '**/node_modules/**',
@@ -100,7 +102,7 @@ function shouldProcessProjectsWatcherEvent(eventType, filePath, provider) {
     }
 
     const normalized = String(filePath || '').toLowerCase();
-    if (provider === 'claude' || provider === 'codex') {
+    if (provider === 'claude' || provider === 'codex' || provider === 'gemini') {
         return normalized.endsWith('.jsonl');
     }
 
@@ -535,13 +537,13 @@ app.get('/api/projects/:projectName/sessions', authenticateToken, async (req, re
 app.get('/api/projects/:projectName/sessions/:sessionId/messages', authenticateToken, async (req, res) => {
     try {
         const { projectName, sessionId } = req.params;
-        const { limit, offset } = req.query;
+        const { limit, offset, provider } = req.query;
 
         // Parse limit and offset if provided
         const parsedLimit = limit ? parseInt(limit, 10) : null;
         const parsedOffset = offset ? parseInt(offset, 10) : 0;
 
-        const result = await getSessionMessages(projectName, sessionId, parsedLimit, parsedOffset);
+        const result = await getSessionMessages(projectName, sessionId, parsedLimit, parsedOffset, provider);
 
         // Handle both old and new response formats
         if (Array.isArray(result)) {
@@ -571,8 +573,9 @@ app.put('/api/projects/:projectName/rename', authenticateToken, async (req, res)
 app.delete('/api/projects/:projectName/sessions/:sessionId', authenticateToken, async (req, res) => {
     try {
         const { projectName, sessionId } = req.params;
-        console.log(`[API] Deleting session: ${sessionId} from project: ${projectName}`);
-        await deleteSession(projectName, sessionId);
+        const { provider } = req.query;
+        console.log(`[API] Deleting session: ${sessionId} from project: ${projectName}, provider: ${provider || 'claude'}`);
+        await deleteSession(projectName, sessionId, provider);
         console.log(`[API] Session ${sessionId} deleted successfully`);
         res.json({ success: true });
     } catch (error) {
@@ -760,10 +763,25 @@ app.get('/api/projects/:projectName/file', authenticateToken, async (req, res) =
             return res.status(404).json({ error: 'Project not found' });
         }
 
-        // Handle both absolute and relative paths
-        const resolved = path.isAbsolute(filePath)
-            ? path.resolve(filePath)
-            : path.resolve(projectRoot, filePath);
+        const resolveWithPipelineFallback = (inputPath) => {
+            if (!inputPath || typeof inputPath !== 'string') return path.resolve(projectRoot, '');
+            if (path.isAbsolute(inputPath)) return path.resolve(inputPath);
+
+            const direct = path.resolve(projectRoot, inputPath);
+            const isSimpleName = !inputPath.includes('/') && !inputPath.includes('\\');
+            if (!isSimpleName) return direct;
+
+            const fallbackMap = {
+                'research_brief.json': '.pipeline/docs/research_brief.json',
+                'tasks.json': '.pipeline/tasks/tasks.json',
+                'pipeline_config.json': '.pipeline/config.json'
+            };
+            const mapped = fallbackMap[inputPath];
+            return mapped ? path.resolve(projectRoot, mapped) : direct;
+        };
+
+        // Handle both absolute and relative paths with pipeline file fallback
+        const resolved = resolveWithPipelineFallback(filePath);
         const normalizedRoot = path.resolve(projectRoot) + path.sep;
         if (!resolved.startsWith(normalizedRoot)) {
             return res.status(403).json({ error: 'Path must be under project root' });
@@ -859,10 +877,25 @@ app.put('/api/projects/:projectName/file', authenticateToken, async (req, res) =
             return res.status(404).json({ error: 'Project not found' });
         }
 
-        // Handle both absolute and relative paths
-        const resolved = path.isAbsolute(filePath)
-            ? path.resolve(filePath)
-            : path.resolve(projectRoot, filePath);
+        const resolveWithPipelineFallback = (inputPath) => {
+            if (!inputPath || typeof inputPath !== 'string') return path.resolve(projectRoot, '');
+            if (path.isAbsolute(inputPath)) return path.resolve(inputPath);
+
+            const direct = path.resolve(projectRoot, inputPath);
+            const isSimpleName = !inputPath.includes('/') && !inputPath.includes('\\');
+            if (!isSimpleName) return direct;
+
+            const fallbackMap = {
+                'research_brief.json': '.pipeline/docs/research_brief.json',
+                'tasks.json': '.pipeline/tasks/tasks.json',
+                'pipeline_config.json': '.pipeline/config.json'
+            };
+            const mapped = fallbackMap[inputPath];
+            return mapped ? path.resolve(projectRoot, mapped) : direct;
+        };
+
+        // Handle both absolute and relative paths with pipeline file fallback
+        const resolved = resolveWithPipelineFallback(filePath);
         const normalizedRoot = path.resolve(projectRoot) + path.sep;
         if (!resolved.startsWith(normalizedRoot)) {
             return res.status(403).json({ error: 'Path must be under project root' });
@@ -1242,7 +1275,8 @@ function handleChatConnection(ws, request) {
     ws.on('message', async (message) => {
         try {
             const data = JSON.parse(message);
-
+            console.log(`[DEBUG] Received WebSocket message: ${data.type}`);
+            
             if (data.type === 'telemetry-settings') {
                 const enabled = data.enabled !== false;
                 writer.telemetryContext = {
@@ -1313,6 +1347,27 @@ function handleChatConnection(ws, request) {
                 );
                 writer.telemetryContext = { ...telemetryContext, provider: 'codex', telemetryEnabled: commandTelemetryEnabled };
                 await queryCodex(data.command, data.options, writer);
+            } else if (data.type === 'gemini-command') {
+                console.log('[DEBUG] Gemini message:', data.command || '[Continue/Resume]');
+                console.log('📁 Project:', data.options?.projectPath || data.options?.cwd || 'Unknown');
+                console.log('🔄 Session:', data.options?.sessionId ? 'Resume' : 'New');
+                console.log('🤖 Model:', data.options?.model || 'default');
+                const commandTelemetryEnabled = data.options?.telemetryEnabled !== false;
+                enqueueConversationTelemetry(
+                    {
+                        name: 'agent_dialogue',
+                        direction: 'user_to_agent',
+                        provider: 'gemini',
+                        sessionId: data.options?.sessionId || data.sessionId || null,
+                        projectPath: data.options?.projectPath || data.options?.cwd || null,
+                        content: trimTelemetryText(String(data.command || '')),
+                        contentLength: String(data.command || '').length,
+                        transportType: data.type,
+                    },
+                    { ...telemetryContext, telemetryEnabled: commandTelemetryEnabled },
+                );
+                writer.telemetryContext = { ...telemetryContext, provider: 'gemini', telemetryEnabled: commandTelemetryEnabled };
+                await spawnGemini(data.command, data.options, writer);
             } else if (data.type === 'cursor-resume') {
                 // Backward compatibility: treat as cursor-command with resume and no prompt
                 console.log('[DEBUG] Cursor resume session (compat):', data.sessionId);
@@ -1330,6 +1385,8 @@ function handleChatConnection(ws, request) {
                     success = abortCursorSession(data.sessionId);
                 } else if (provider === 'codex') {
                     success = abortCodexSession(data.sessionId);
+                } else if (provider === 'gemini') {
+                    success = abortGeminiSession(data.sessionId);
                 } else {
                     // Use Claude Agents SDK
                     success = await abortClaudeSDKSession(data.sessionId);
@@ -1372,6 +1429,8 @@ function handleChatConnection(ws, request) {
                     isActive = isCursorSessionActive(sessionId);
                 } else if (provider === 'codex') {
                     isActive = isCodexSessionActive(sessionId);
+                } else if (provider === 'gemini') {
+                    isActive = isGeminiSessionActive(sessionId);
                 } else {
                     // Use Claude Agents SDK
                     isActive = isClaudeSDKSessionActive(sessionId);
@@ -1388,8 +1447,10 @@ function handleChatConnection(ws, request) {
                 const activeSessions = {
                     claude: getActiveClaudeSDKSessions(),
                     cursor: getActiveCursorSessions(),
-                    codex: getActiveCodexSessions()
+                    codex: getActiveCodexSessions(),
+                    gemini: getActiveGeminiSessions()
                 };
+
                 writer.send({
                     type: 'active-sessions',
                     sessions: activeSessions
@@ -1428,7 +1489,7 @@ function handleShellConnection(ws) {
                 const projectPath = data.projectPath || process.cwd();
                 const sessionId = data.sessionId;
                 const hasSession = data.hasSession;
-                const provider = ['claude', 'cursor', 'codex', 'plain-shell'].includes(data.provider)
+                const provider = ['claude', 'cursor', 'codex', 'gemini', 'plain-shell'].includes(data.provider)
                     ? data.provider
                     : 'claude';
                 const initialCommand = data.initialCommand;
@@ -1442,9 +1503,9 @@ function handleShellConnection(ws) {
                     initialCommand.includes('setup-token') ||
                     initialCommand.includes('/login') ||
                     isCursorLoginCommand(initialCommand) ||
+                    isGeminiLoginCommand(initialCommand) ||
                     initialCommand.includes('auth login')
                 );
-
                 // Include command hash in session key so different commands get separate sessions
                 const commandSuffix = isPlainShell && initialCommand
                     ? `_cmd_${Buffer.from(initialCommand).toString('base64').slice(0, 16)}`
@@ -1502,12 +1563,14 @@ function handleShellConnection(ws) {
                 if (isPlainShell) {
                     welcomeMsg = `\x1b[36mStarting terminal in: ${projectPath}\x1b[0m\r\n`;
                 } else {
-                    const providerName = provider === 'cursor' ? 'Cursor' : provider === 'codex' ? 'Codex' : 'Claude';
+                    const providerName = provider === 'cursor' ? 'Cursor' : 
+                                      provider === 'codex' ? 'Codex' : 
+                                      provider === 'gemini' ? 'Gemini' : 
+                                      'Claude';
                     welcomeMsg = hasSession ?
                         `\x1b[36mResuming ${providerName} session ${sessionId} in: ${projectPath}\x1b[0m\r\n` :
                         `\x1b[36mStarting new ${providerName} session in: ${projectPath}\x1b[0m\r\n`;
                 }
-
                 ws.send(JSON.stringify({
                     type: 'output',
                     data: welcomeMsg
@@ -1573,8 +1636,25 @@ function handleShellConnection(ws) {
                                 shellCommand = `cd "${projectPath}" && codex`;
                             }
                         }
+                    } else if (provider === 'gemini') {
+                        // Use gemini command
+                        const command = initialCommand || 'gemini';
+                        if (os.platform() === 'win32') {
+                            if (hasSession && sessionId) {
+                                shellCommand = `Set-Location -Path "${projectPath}"; gemini --resume ${sessionId}; if ($LASTEXITCODE -ne 0) { gemini }`;
+                            } else {
+                                shellCommand = `Set-Location -Path "${projectPath}"; ${command}`;
+                            }
+                        } else {
+                            if (hasSession && sessionId) {
+                                shellCommand = `cd "${projectPath}" && gemini --resume ${sessionId} || gemini`;
+                            } else {
+                                shellCommand = `cd "${projectPath}" && ${command}`;
+                            }
+                        }
                     } else {
-                        // Use claude command (default) or initialCommand if provided
+                            // Use claude command (default) or initialCommand if provided
+
                         const command = initialCommand || 'claude';
                         if (os.platform() === 'win32') {
                             if (hasSession && sessionId) {
@@ -2315,6 +2395,54 @@ app.get('/api/projects/:projectName/sessions/:sessionId/token-usage', authentica
       return res.json({
         used: totalTokens,
         total: contextWindow
+      });
+    }
+
+    // Handle Gemini sessions
+    if (provider === 'gemini') {
+      const geminiSessionPath = path.join(homeDir, '.gemini', 'sessions', `${safeSessionId}.jsonl`);
+      let fileContent;
+      try {
+        fileContent = await fsPromises.readFile(geminiSessionPath, 'utf8');
+      } catch (error) {
+        if (error.code === 'ENOENT') {
+          return res.status(404).json({ error: 'Session file not found', path: geminiSessionPath });
+        }
+        throw error;
+      }
+
+      const lines = fileContent.trim().split('\n');
+      let latestStats = null;
+      for (let i = lines.length - 1; i >= 0; i--) {
+        try {
+          const entry = JSON.parse(lines[i]);
+          if (entry.type === 'status' && entry.stats) {
+            latestStats = entry.stats;
+            break;
+          }
+        } catch {
+          // Ignore malformed line
+        }
+      }
+
+      const used = latestStats
+        ? (latestStats.total_tokens || ((latestStats.input_tokens || 0) + (latestStats.output_tokens || 0)))
+        : 0;
+      const total = parseInt(process.env.GEMINI_CONTEXT_WINDOW || process.env.CONTEXT_WINDOW || '2000000', 10);
+      const cacheCreation = latestStats?.cache_creation_input_tokens || 0;
+      const cacheRead = latestStats?.cache_read_input_tokens || 0;
+      const input = latestStats?.input_tokens || 0;
+      const output = latestStats?.output_tokens || 0;
+
+      return res.json({
+        used,
+        total,
+        breakdown: {
+          input,
+          output,
+          cacheCreation,
+          cacheRead
+        }
       });
     }
 

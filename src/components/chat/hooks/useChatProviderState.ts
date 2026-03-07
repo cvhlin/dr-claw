@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { authenticatedFetch } from '../../../utils/api';
-import { CLAUDE_MODELS, CODEX_MODELS, CURSOR_MODELS } from '../../../../shared/modelConstants';
+import { CLAUDE_MODELS, CODEX_MODELS, CURSOR_MODELS, GEMINI_MODELS } from '../../../../shared/modelConstants';
 import type { PendingPermissionRequest, PermissionMode, Provider } from '../types/types';
 import type { ProjectSession, SessionProvider } from '../../../types/app';
 
@@ -23,17 +23,39 @@ export function useChatProviderState({ selectedSession }: UseChatProviderStateAr
   const [codexModel, setCodexModel] = useState<string>(() => {
     return localStorage.getItem('codex-model') || CODEX_MODELS.DEFAULT;
   });
+  const [geminiModel, setGeminiModel] = useState<string>(() => {
+    return localStorage.getItem('gemini-model') || GEMINI_MODELS.DEFAULT;
+  });
 
   const lastProviderRef = useRef(provider);
 
+  const getProviderPermissionModes = useCallback((p: SessionProvider): PermissionMode[] => {
+    return p === 'codex'
+      ? ['default', 'acceptEdits', 'bypassPermissions']
+      : ['default', 'acceptEdits', 'bypassPermissions', 'plan'];
+  }, []);
+
+  const getProviderModeStorageKey = useCallback((p: SessionProvider) => `permissionMode-provider-${p}`, []);
+
   useEffect(() => {
+    const validModes = getProviderPermissionModes(provider);
+    const providerMode = localStorage.getItem(getProviderModeStorageKey(provider));
+    const defaultMode: PermissionMode = validModes.includes((providerMode as PermissionMode))
+      ? (providerMode as PermissionMode)
+      : 'default';
+
     if (!selectedSession?.id) {
+      setPermissionMode(defaultMode);
       return;
     }
 
     const savedMode = localStorage.getItem(`permissionMode-${selectedSession.id}`);
-    setPermissionMode((savedMode as PermissionMode) || 'default');
-  }, [selectedSession?.id]);
+    if (savedMode && validModes.includes(savedMode as PermissionMode)) {
+      setPermissionMode(savedMode as PermissionMode);
+    } else {
+      setPermissionMode(defaultMode);
+    }
+  }, [selectedSession?.id, provider, getProviderPermissionModes, getProviderModeStorageKey]);
 
   useEffect(() => {
     if (!selectedSession?.__provider || selectedSession.__provider === provider) {
@@ -81,20 +103,18 @@ export function useChatProviderState({ selectedSession }: UseChatProviderStateAr
   }, [provider]);
 
   const cyclePermissionMode = useCallback(() => {
-    const modes: PermissionMode[] =
-      provider === 'codex'
-        ? ['default', 'acceptEdits', 'bypassPermissions']
-        : ['default', 'acceptEdits', 'bypassPermissions', 'plan'];
+    const modes = getProviderPermissionModes(provider);
 
     const currentIndex = modes.indexOf(permissionMode);
     const nextIndex = (currentIndex + 1) % modes.length;
     const nextMode = modes[nextIndex];
     setPermissionMode(nextMode);
+    localStorage.setItem(getProviderModeStorageKey(provider), nextMode);
 
     if (selectedSession?.id) {
       localStorage.setItem(`permissionMode-${selectedSession.id}`, nextMode);
     }
-  }, [permissionMode, provider, selectedSession?.id]);
+  }, [permissionMode, provider, selectedSession?.id, getProviderPermissionModes, getProviderModeStorageKey]);
 
   return {
     provider,
@@ -105,6 +125,8 @@ export function useChatProviderState({ selectedSession }: UseChatProviderStateAr
     setClaudeModel,
     codexModel,
     setCodexModel,
+    geminiModel,
+    setGeminiModel,
     permissionMode,
     setPermissionMode,
     pendingPermissionRequests,

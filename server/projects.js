@@ -69,7 +69,7 @@ import os from 'os';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const VIBELAB_SKILLS_DIR = path.join(__dirname, '..', 'skills');
-const PROJECT_SKILL_FOLDERS = ['.claude', '.agents', '.cursor'];
+const PROJECT_SKILL_FOLDERS = ['.claude', '.agents', '.cursor', '.gemini'];
 const PROJECT_PIPELINE_FOLDERS = ['Survey', 'Ideation', 'Experiment', 'Publication'];
 
 function normalizeTaskStatus(status) {
@@ -554,6 +554,14 @@ async function getProjects(progressCallback = null) {
           project.codexSessions = [];
         }
 
+        // Also fetch Gemini sessions for this project
+        try {
+          project.geminiSessions = await getGeminiSessions(actualProjectDir);
+        } catch (e) {
+          console.warn(`Could not load Gemini sessions for project ${entry.name}:`, e.message);
+          project.geminiSessions = [];
+        }
+
         // Add TaskMaster detection
         try {
           const taskMasterResult = await detectTaskMasterFolder(actualProjectDir);
@@ -671,6 +679,13 @@ async function getProjects(progressCallback = null) {
         });
       } catch (e) {
         console.warn(`Could not load Codex sessions for manual project ${projectName}:`, e.message);
+      }
+
+      // Try to fetch Gemini sessions for manual projects too
+      try {
+        project.geminiSessions = await getGeminiSessions(actualProjectDir);
+      } catch (e) {
+        console.warn(`Could not load Gemini sessions for manual project ${projectName}:`, e.message);
       }
 
       // Add TaskMaster detection for manual projects
@@ -1062,7 +1077,97 @@ async function parseAgentTools(filePath) {
 }
 
 // Get messages for a specific session with pagination support
-async function getSessionMessages(projectName, sessionId, limit = null, offset = 0) {
+async function getSessionMessages(projectName, sessionId, limit = null, offset = 0, provider = 'claude') {
+  console.log(`[DEBUG] getSessionMessages - project: ${projectName}, session: ${sessionId}, provider: ${provider}`);
+  if (provider === 'gemini') {
+    const geminiSessionFile = path.join(os.homedir(), '.gemini', 'sessions', `${sessionId}.jsonl`);
+    console.log(`[DEBUG] Reading Gemini session file: ${geminiSessionFile}`);
+    try {
+      await fs.access(geminiSessionFile);
+      const messages = [];
+      const mergeGeminiMessageFragment = (entry) => {
+        const role = entry.role || entry.message?.role;
+        const content = entry.content || entry.message?.content;
+        const isMessageEntry = entry.type === 'message' || (role && content);
+        const isStringContent = typeof content === 'string';
+
+        if (!isMessageEntry || !isStringContent || !role) {
+          messages.push(entry);
+          return;
+        }
+
+        const last = messages[messages.length - 1];
+        const lastRole = last?.role || last?.message?.role;
+        const lastContent = last?.content || last?.message?.content;
+        const canMerge =
+          last &&
+          last.type === 'message' &&
+          lastRole === role &&
+          typeof lastContent === 'string';
+
+        if (canMerge && role === 'assistant') {
+          last.content = `${lastContent}${content}`;
+          if (entry.timestamp) {
+            last.timestamp = entry.timestamp;
+          }
+          return;
+        }
+
+        if (canMerge && role === 'user' && lastContent === content) {
+          if (entry.timestamp) {
+            last.timestamp = entry.timestamp;
+          }
+          return;
+        }
+
+        messages.push(entry);
+      };
+      const fileStream = fsSync.createReadStream(geminiSessionFile);
+      const rl = readline.createInterface({
+        input: fileStream,
+        crlfDelay: Infinity
+      });
+
+      for await (const line of rl) {
+        if (line.trim()) {
+          try {
+            const entry = JSON.parse(line);
+            // Gemini JSONL files store messages with 'role' or 'type'
+            const role = entry.role || entry.message?.role;
+            const content = entry.content || entry.message?.content;
+            const hasContent = content || (Array.isArray(entry.message?.content) || typeof entry.message?.content === 'string');
+            
+            if (entry.type === 'message' || (role && hasContent) || entry.type === 'tool_use' || entry.type === 'tool_result') {
+              // Ensure role and content are available at top level for the frontend
+              if (!entry.role && role) entry.role = role;
+              if (!entry.content && content) entry.content = content;
+              mergeGeminiMessageFragment(entry);
+            }
+          } catch (parseError) {}
+        }
+      }
+      
+      console.log(`[DEBUG] Found ${messages.length} valid messages in Gemini session file`);
+      const total = messages.length;
+      if (limit === null) return messages;
+      
+      const startIndex = Math.max(0, total - offset - limit);
+      const endIndex = total - offset;
+      const paginatedMessages = messages.slice(startIndex, endIndex);
+      
+      return {
+        messages: paginatedMessages,
+        total,
+        hasMore: startIndex > 0,
+        offset,
+        limit
+      };
+    } catch (e) {
+      console.warn(`Could not read Gemini session ${sessionId}:`, e.message);
+      return limit === null ? [] : { messages: [], total: 0, hasMore: false };
+    }
+  }
+
   const projectDir = path.join(os.homedir(), '.claude', 'projects', projectName);
 
   try {
@@ -1263,7 +1368,20 @@ async function renameProject(projectName, newDisplayName) {
 }
 
 // Delete a session from a project
-async function deleteSession(projectName, sessionId) {
+async function deleteSession(projectName, sessionId, provider = 'claude') {
+  if (provider === 'gemini') {
+    const geminiSessionFile = path.join(os.homedir(), '.gemini', 'sessions', `${sessionId}.jsonl`);
+    try {
+      await fs.access(geminiSessionFile);
+      await fs.unlink(geminiSessionFile);
+      console.log(`[Gemini] Deleted session file: ${geminiSessionFile}`);
+      return true;
+    } catch (e) {
+      console.error(`[Gemini] Failed to delete session ${sessionId}:`, e.message);
+      throw new Error(`Failed to delete Gemini session: ${e.message}`);
+    }
+  }
+
   const projectDir = path.join(os.homedir(), '.claude', 'projects', projectName);
 
   try {
@@ -1843,7 +1961,149 @@ async function getCursorSessions(projectPath) {
 }
 
 
-function normalizeComparablePath(inputPath) {
+// Fetch Gemini sessions for a given project path
+async function getGeminiSessions(projectPath) {
+  try {
+    const normalizedProjectPath = await normalizeComparablePath(projectPath);
+    const geminiSessionsDir = path.join(os.homedir(), '.gemini', 'sessions');
+
+    try {
+      await fs.access(geminiSessionsDir);
+    } catch (error) {
+      return [];
+    }
+
+    const files = await fs.readdir(geminiSessionsDir);
+    const sessions = [];
+
+    for (const file of files) {
+      if (!file.endsWith('.jsonl')) continue;
+
+      const filePath = path.join(geminiSessionsDir, file);
+      try {
+        const stats = await fs.stat(filePath);
+
+        // Read just the first few lines for metadata
+        const fileStream = fsSync.createReadStream(filePath);
+        const rl = readline.createInterface({
+          input: fileStream,
+          crlfDelay: Infinity
+        });
+
+        let explicitTitle = null;
+        let foundMatchingCwd = false;
+        let firstMessageText = null;
+        let lineCount = 0;
+
+        for await (const line of rl) {
+          lineCount++;
+          if (lineCount > 500) break; // Increased from 100 to find titles in longer sessions
+
+          if (line.trim()) {
+            try {
+              const entry = JSON.parse(line);
+              
+              // 1. CWD Match
+              if (!foundMatchingCwd) {
+                const sessionCwd = entry.cwd || entry.payload?.cwd;
+                if (sessionCwd) {
+                  const normalizedSessionCwd = await normalizeComparablePath(sessionCwd);
+                  if (normalizedSessionCwd === normalizedProjectPath) {
+                    foundMatchingCwd = true;
+                  }
+                }
+              }
+
+              // 2. Explicit Title (rare but good if exists)
+              if (!explicitTitle) {
+                const title = entry.summary || entry.title || entry.payload?.title || entry.payload?.summary;
+                if (title && typeof title === 'string' && title.trim() && 
+                    !title.includes('Gemini Session') && !title.includes('New Session')) {
+                  explicitTitle = title.trim();
+                }
+              }
+
+              // 3. User Message Extraction
+              if (!firstMessageText && (entry.role === 'user' || (entry.type === 'message' && entry.role === 'user'))) {
+                let content = entry.content || entry.message?.content || entry.payload?.message?.content;
+                
+                if (content) {
+                  let textContent = '';
+                  if (typeof content === 'string') {
+                    textContent = content;
+                  } else if (Array.isArray(content)) {
+                    textContent = content
+                      .map(part => part.text || (typeof part === 'string' ? part : ''))
+                      .filter(Boolean)
+                      .join(' ');
+                  }
+
+                  if (textContent.trim()) {
+                    let cleaned = textContent.trim();
+                    
+                    // Filter out system-like user messages (e.g. from sub-agents or automation)
+                    const isSystemLike = 
+                      cleaned.includes('Base directory for this skill:') ||
+                      cleaned.startsWith('<command-name>') ||
+                      cleaned.includes('{"subtasks":');
+
+                    if (!isSystemLike) {
+                      // Pattern A: Please help me with "REQUEST" ...
+                      const helpMatch = cleaned.match(/Please help me with ["'](.*?)["']/);
+                      if (helpMatch && helpMatch[1]) {
+                        firstMessageText = helpMatch[1];
+                      } else {
+                        // Pattern B: Raw message, take first line
+                        firstMessageText = cleaned.split('\n')[0].replace(/#+\s*/, '').trim();
+                      }
+                    }
+                  }
+                }
+              }
+            } catch (e) {}
+          }
+          
+          // If we found a matching CWD and both an explicit title and a user message, we can stop early
+          if (foundMatchingCwd && explicitTitle && firstMessageText) break;
+        }
+        rl.close();
+
+        if (foundMatchingCwd) {
+          // Priority: Explicit Title > Cleaned User Message > Default
+          let finalName = explicitTitle || firstMessageText;
+          
+          if (finalName) {
+            // Further cleanup: remove markdown bold/italic and limit length
+            finalName = finalName.replace(/[\*\_\`]/g, '');
+            if (finalName.length > 50) finalName = finalName.substring(0, 47) + '...';
+          } else {
+            finalName = 'Untitled Session';
+          }
+
+          sessions.push({
+            id: path.basename(file, '.jsonl'),
+            name: finalName,
+            createdAt: stats.birthtime.toISOString(),
+            lastActivity: stats.mtime.toISOString(),
+            messageCount: 0,
+            projectPath: projectPath,
+            __provider: 'gemini'
+          });
+        }
+      } catch (err) {}
+    }
+
+    if (sessions.length > 0) {
+      console.log(`[Gemini] Found ${sessions.length} sessions for project ${projectPath}`);
+    }
+    return sessions.sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity)).slice(0, 5);
+  } catch (error) {
+    console.error('Error fetching Gemini sessions:', error);
+    return [];
+  }
+}
+
+async function normalizeComparablePath(inputPath) {
   if (!inputPath || typeof inputPath !== 'string') {
     return '';
   }
@@ -2342,6 +2602,7 @@ export {
   extractProjectDirectory,
   clearProjectDirectoryCache,
   getCodexSessions,
+  getGeminiSessions,
   getCodexSessionMessages,
   deleteCodexSession,
   ensureProjectSkillLinks,
