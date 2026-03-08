@@ -9,7 +9,7 @@ import {
   GitBranch, FolderOpen, ChevronDown, ChevronRight, ExternalLink,
   FileCode, Beaker, Brain, Save, AlertCircle,
   Sparkles, Copy, Check, PenTool, Target, Clock3, ListChecks, MessageSquare,
-  Plus, Trash2, AlertTriangle
+  Plus, Trash2, AlertTriangle, Maximize2
 } from 'lucide-react';
 import ReactDOM from 'react-dom';
 import { ScrollArea } from './ui/scroll-area';
@@ -250,6 +250,159 @@ const ARTIFACT_STAGE_ORDER = [
   'Other',
 ];
 
+const PIPELINE_STAGE_KEYS = TASK_STAGE_ORDER.filter((stage) => stage !== 'unassigned');
+
+function normalizeTask(task) {
+  return {
+    ...task,
+    stage: task?.stage === 'presentation'
+      ? 'promotion'
+      : task?.stage === 'research'
+        ? 'survey'
+        : (TASK_STAGE_META[task?.stage] ? task.stage : 'unassigned'),
+    status: TASK_STATUS_META[task?.status] ? task.status : 'pending',
+  };
+}
+
+function normalizeTasks(tasks) {
+  return (Array.isArray(tasks) ? tasks : []).map(normalizeTask);
+}
+
+function getArtifactPipelineStage(stage) {
+  if (stage === 'Literature Survey' || stage === 'Gap Analysis') return 'survey';
+  if (IDEATION_STAGES.has(stage)) return 'ideation';
+  if (EXPERIMENT_STAGES.has(stage)) return 'experiment';
+  if (PUBLICATION_STAGES.has(stage)) return 'publication';
+  if (PRESENTATION_STAGES.has(stage)) return 'promotion';
+  return 'unassigned';
+}
+
+function buildTaskSummary(tasks) {
+  const total = tasks.length;
+  const done = tasks.filter((task) => task.status === 'done').length;
+  const inProgress = tasks.filter((task) => task.status === 'in-progress').length;
+  const pending = tasks.filter((task) => task.status === 'pending').length;
+  const progress = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  return { total, done, inProgress, pending, progress };
+}
+
+function buildPipelineStageOverview(tasks, artifacts) {
+  const stages = PIPELINE_STAGE_KEYS.reduce((acc, stage) => {
+    acc[stage] = {
+      key: stage,
+      meta: TASK_STAGE_META[stage],
+      total: 0,
+      done: 0,
+      inProgress: 0,
+      pending: 0,
+      artifacts: 0,
+    };
+    return acc;
+  }, {});
+
+  tasks.forEach((task) => {
+    const bucket = stages[task.stage];
+    if (!bucket) return;
+    bucket.total += 1;
+    if (task.status === 'done') bucket.done += 1;
+    if (task.status === 'in-progress') bucket.inProgress += 1;
+    if (task.status === 'pending') bucket.pending += 1;
+  });
+
+  artifacts.forEach((artifact) => {
+    const stage = classifyArtifact(artifact.name, artifact.relativePath).stage;
+    const bucket = stages[getArtifactPipelineStage(stage)];
+    if (!bucket) return;
+    bucket.artifacts += 1;
+  });
+
+  return PIPELINE_STAGE_KEYS.map((stage) => stages[stage]);
+}
+
+function getNextTask(tasks) {
+  return tasks.find((task) => task.status === 'in-progress')
+    ?? tasks.find((task) => task.status === 'pending')
+    ?? null;
+}
+
+function getSourcePapers(instance) {
+  if (!Array.isArray(instance?.source_papers)) {
+    return [];
+  }
+
+  return instance.source_papers
+    .map((paper, index) => {
+      if (typeof paper === 'string') {
+        return { reference: paper, rank: index + 1 };
+      }
+      if (paper && typeof paper === 'object') {
+        return {
+          rank: paper.rank ?? index + 1,
+          reference: paper.reference || paper.title || paper.url || `Paper ${index + 1}`,
+          type: paper.type,
+          url: paper.url,
+        };
+      }
+      return null;
+    })
+    .filter(Boolean);
+}
+
+function ResearchMetricCard({
+  icon: Icon,
+  label,
+  value,
+  detail,
+  accentClass,
+}) {
+  return (
+    <div className="rounded-[26px] border border-white/70 bg-white/78 p-4 shadow-[0_16px_45px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-slate-950/50 dark:shadow-[0_20px_55px_rgba(2,6,23,0.45)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[11px] uppercase tracking-[0.26em] text-muted-foreground">{label}</div>
+          <div className="mt-3 text-3xl font-semibold tracking-tight text-foreground">{value}</div>
+          {detail ? <div className="mt-2 text-xs text-muted-foreground">{detail}</div> : null}
+        </div>
+        <div className={`flex h-11 w-11 items-center justify-center rounded-2xl border ${accentClass}`}>
+          <Icon className="h-5 w-5" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PipelineStageChip({ stage }) {
+  const tone = {
+    survey: 'border-sky-200/70 bg-sky-50/80 dark:border-sky-900/70 dark:bg-sky-950/20',
+    ideation: 'border-amber-200/70 bg-amber-50/80 dark:border-amber-900/70 dark:bg-amber-950/20',
+    experiment: 'border-cyan-200/70 bg-cyan-50/80 dark:border-cyan-900/70 dark:bg-cyan-950/20',
+    publication: 'border-purple-200/70 bg-purple-50/80 dark:border-purple-900/70 dark:bg-purple-950/20',
+    promotion: 'border-pink-200/70 bg-pink-50/80 dark:border-pink-900/70 dark:bg-pink-950/20',
+  }[stage.key] || 'border-border/60 bg-background/60';
+
+  const summaryLabel = stage.total > 0
+    ? `${stage.done}/${stage.total} done`
+    : stage.artifacts > 0
+      ? 'Artifacts only'
+      : 'Waiting';
+
+  return (
+    <div className={`rounded-2xl border px-3 py-3 shadow-sm ${tone}`}>
+      <div className="flex items-center justify-between gap-3">
+        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${stage.meta.className}`}>
+          {stage.meta.label}
+        </span>
+        <span className="text-[11px] text-muted-foreground">{summaryLabel}</span>
+      </div>
+      <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+        <span>{stage.total} tasks</span>
+        <span>{stage.artifacts} artifacts</span>
+      </div>
+    </div>
+  );
+}
+
 function sortArtifactsByStageAndPath(files) {
   const rank = new Map(ARTIFACT_STAGE_ORDER.map((stage, index) => [stage, index]));
   return [...files].sort((left, right) => {
@@ -266,6 +419,8 @@ function sortArtifactsByStageAndPath(files) {
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg']);
 const AUDIO_EXTENSIONS = new Set(['mp3', 'wav', 'ogg', 'm4a']);
 const VIDEO_EXTENSIONS = new Set(['mp4', 'webm', 'mov', 'm4v']);
+const MARKDOWN_EXTENSIONS = new Set(['md', 'markdown', 'mdx']);
+const HTML_EXTENSIONS = new Set(['html', 'htm']);
 const UNSUPPORTED_BINARY_EXTENSIONS = new Set([
   'zip', 'gz', 'tar', 'tgz', '7z', 'rar',
   'ppt', 'pptx', 'doc', 'docx', 'xls', 'xlsx',
@@ -280,6 +435,8 @@ function getArtifactPreviewKind(file) {
   if (IMAGE_EXTENSIONS.has(extension)) return 'image';
   if (AUDIO_EXTENSIONS.has(extension)) return 'audio';
   if (VIDEO_EXTENSIONS.has(extension)) return 'video';
+  if (MARKDOWN_EXTENSIONS.has(extension)) return 'markdown';
+  if (HTML_EXTENSIONS.has(extension)) return 'html';
   if (UNSUPPORTED_BINARY_EXTENSIONS.has(extension)) return 'unsupported';
   return 'text';
 }
@@ -302,37 +459,46 @@ function OverviewCard({ instance, config }) {
     : taskText;
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4 space-y-3">
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <FlaskConical className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-          Research Overview
-        </h3>
-        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${modeColor}`}>
+    <div className="rounded-[28px] border border-border/60 bg-card/78 p-5 shadow-sm backdrop-blur">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-blue-200/70 bg-blue-50/90 text-blue-700 dark:border-blue-900/70 dark:bg-blue-950/30 dark:text-blue-300">
+            <FlaskConical className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-base font-semibold tracking-tight text-foreground">
+              Research Overview
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Brief, scope, and instance metadata for this workspace
+            </p>
+          </div>
+        </div>
+        <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${modeColor}`}>
           {mode} Mode
         </span>
       </div>
       {instance?.target && (
-        <div>
-          <p className="text-xs text-muted-foreground mb-0.5">Target Paper</p>
-          <p className="text-sm font-medium text-foreground">{instance.target}</p>
+        <div className="rounded-2xl border border-border/60 bg-background/70 p-4 shadow-sm">
+          <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Target Paper</p>
+          <p className="mt-2 text-sm font-medium text-foreground">{instance.target}</p>
           {instance?.url && (
             <a href={instance.url} target="_blank" rel="noreferrer"
-              className="text-xs text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1 mt-0.5">
+              className="mt-2 inline-flex items-center gap-1 text-xs text-blue-600 hover:underline dark:text-blue-400">
               {instance.url} <ExternalLink className="w-3 h-3" />
             </a>
           )}
         </div>
       )}
       {(instance?.instance_id ?? instance?.instance_path) && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span>Instance: <code className="bg-muted px-1 rounded">{instance.instance_id ?? instance.instance_path?.split('/').pop()}</code></span>
           {config?.category && <span>Category: <code className="bg-muted px-1 rounded">{config.category}</code></span>}
         </div>
       )}
       {taskText && (
-        <div>
-          <p className="text-xs text-muted-foreground mb-0.5">Task Description</p>
+        <div className="rounded-2xl border border-border/60 bg-background/70 p-4 shadow-sm">
+          <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Task Description</p>
           <div className="text-sm text-foreground/80 leading-relaxed markdown-body">
             <ReactMarkdown
               remarkPlugins={[remarkGfm, remarkMath]}
@@ -362,7 +528,7 @@ function OverviewCard({ instance, config }) {
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 px-0 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 mt-1"
+              className="mt-1 h-6 px-0 text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
               onClick={() => setIsExpanded(!isExpanded)}
             >
               {isExpanded ? (
@@ -378,6 +544,11 @@ function OverviewCard({ instance, config }) {
           )}
         </div>
       )}
+      {!instance?.target && !taskText && (
+        <div className="rounded-2xl border border-dashed border-border/60 bg-background/60 px-4 py-5 text-sm text-muted-foreground">
+          Start the pipeline in Chat to populate the research brief, target paper, and working plan here.
+        </div>
+      )}
     </div>
   );
 }
@@ -389,18 +560,38 @@ function PapersCard({ papers }) {
   const shown = expanded ? papers : papers.slice(0, 5);
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4 space-y-3">
-      <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-        <BookOpen className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-        Source Papers
-        <span className="text-xs font-normal text-muted-foreground">({papers.length})</span>
-      </h3>
+    <div className="rounded-[28px] border border-border/60 bg-card/78 p-5 shadow-sm backdrop-blur">
+      <div className="flex items-center gap-3">
+        <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-emerald-200/70 bg-emerald-50/90 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300">
+          <BookOpen className="w-5 h-5" />
+        </div>
+        <div>
+          <h3 className="text-base font-semibold tracking-tight text-foreground">
+            Source Papers
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            Related work and references supplied to the pipeline ({papers.length})
+          </p>
+        </div>
+      </div>
       <ul className="space-y-1.5">
         {shown.map((p, i) => (
-          <li key={i} className="flex items-start gap-2 text-sm">
-            <span className="text-xs text-muted-foreground mt-0.5 w-5 text-right flex-shrink-0">{p.rank || i + 1}.</span>
-            <div className="min-w-0">
-              <span className="text-foreground">{p.reference}</span>
+          <li key={i} className="flex items-start gap-3 rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-sm shadow-sm">
+            <span className="mt-0.5 w-6 flex-shrink-0 text-right text-xs text-muted-foreground">{p.rank || i + 1}.</span>
+            <div className="min-w-0 flex-1">
+              {p.url ? (
+                <a
+                  href={p.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-foreground hover:text-blue-600 dark:hover:text-blue-400"
+                >
+                  <span>{p.reference}</span>
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              ) : (
+                <span className="text-foreground">{p.reference}</span>
+              )}
               {p.type && (() => {
                 const types = Array.isArray(p.type) ? p.type : [p.type];
                 const label = types.join(', ');
@@ -415,7 +606,7 @@ function PapersCard({ papers }) {
       </ul>
       {papers.length > 5 && (
         <button onClick={() => setExpanded(!expanded)}
-          className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
+          className="flex items-center gap-1 text-xs text-blue-600 hover:underline dark:text-blue-400">
           {expanded ? 'Show less' : `Show all ${papers.length} papers`}
           <ChevronDown className={`w-3 h-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
         </button>
@@ -545,27 +736,9 @@ function TaskPipelineBoard({ tasks, isLoading, onNavigateToChat, projectName, on
     });
   }, [tasks]);
 
-  const normalizedTasks = useMemo(
-    () => (Array.isArray(tasks) ? tasks : []).map((task) => ({
-      ...task,
-      stage: task?.stage === 'presentation'
-        ? 'promotion'
-        : task?.stage === 'research'
-          ? 'survey'
-        : (TASK_STAGE_META[task?.stage] ? task.stage : 'unassigned'),
-      status: TASK_STATUS_META[task?.status] ? task.status : 'pending',
-    })),
-    [tasks],
-  );
+  const normalizedTasks = useMemo(() => normalizeTasks(tasks), [tasks]);
 
-  const summary = useMemo(() => {
-    const total = normalizedTasks.length;
-    const done = normalizedTasks.filter((task) => task.status === 'done').length;
-    const inProgress = normalizedTasks.filter((task) => task.status === 'in-progress').length;
-    const pending = normalizedTasks.filter((task) => task.status === 'pending').length;
-    const progress = total > 0 ? Math.round((done / total) * 100) : 0;
-    return { total, done, inProgress, pending, progress };
-  }, [normalizedTasks]);
+  const summary = useMemo(() => buildTaskSummary(normalizedTasks), [normalizedTasks]);
 
   const groupedTasks = useMemo(() => {
     const groups = {
@@ -595,18 +768,18 @@ function TaskPipelineBoard({ tasks, isLoading, onNavigateToChat, projectName, on
   }, []);
 
   return (
-    <div className="rounded-xl border border-border bg-card overflow-hidden">
-      <div className="px-4 py-3 border-b border-border bg-gradient-to-r from-sky-50 via-cyan-50 to-emerald-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-900">
+    <div className="overflow-hidden rounded-[30px] border border-border/60 bg-card/78 shadow-sm backdrop-blur">
+      <div className="border-b border-border/60 bg-gradient-to-r from-sky-50 via-cyan-50 to-emerald-50 px-5 py-4 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-white/80 dark:bg-slate-800/80 border border-border flex items-center justify-center">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/70 bg-white/85 shadow-sm dark:border-white/10 dark:bg-slate-800/80">
               <ListChecks className="w-4 h-4 text-cyan-700 dark:text-cyan-300" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+              <h3 className="text-base font-semibold tracking-tight text-foreground">
                 Pipeline Task List
               </h3>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground sm:text-sm">
                 Stage-oriented task board for your research pipeline
               </p>
             </div>
@@ -614,7 +787,7 @@ function TaskPipelineBoard({ tasks, isLoading, onNavigateToChat, projectName, on
         </div>
       </div>
 
-      <div className="p-4 space-y-3">
+      <div className="space-y-4 p-5">
         {isLoading ? (
           <div className="text-sm text-muted-foreground">Loading pipeline tasks...</div>
         ) : summary.total === 0 ? (
@@ -636,27 +809,27 @@ function TaskPipelineBoard({ tasks, isLoading, onNavigateToChat, projectName, on
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              <div className="rounded-lg border border-border bg-background px-3 py-2">
-                <p className="text-[11px] text-muted-foreground">Total</p>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-3 shadow-sm">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Total</p>
                 <p className="text-sm font-semibold text-foreground">{summary.total}</p>
               </div>
-              <div className="rounded-lg border border-border bg-background px-3 py-2">
-                <p className="text-[11px] text-muted-foreground">Done</p>
+              <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/70 px-4 py-3 shadow-sm dark:border-emerald-900/70 dark:bg-emerald-950/20">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-700/80 dark:text-emerald-300/80">Done</p>
                 <p className="text-sm font-semibold text-green-600 dark:text-green-400">{summary.done}</p>
               </div>
-              <div className="rounded-lg border border-border bg-background px-3 py-2">
-                <p className="text-[11px] text-muted-foreground">In Progress</p>
+              <div className="rounded-2xl border border-blue-200/70 bg-blue-50/70 px-4 py-3 shadow-sm dark:border-blue-900/70 dark:bg-blue-950/20">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-blue-700/80 dark:text-blue-300/80">In Progress</p>
                 <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">{summary.inProgress}</p>
               </div>
-              <div className="rounded-lg border border-border bg-background px-3 py-2">
-                <p className="text-[11px] text-muted-foreground">Pending</p>
+              <div className="rounded-2xl border border-slate-200/70 bg-slate-50/70 px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-950/30">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Pending</p>
                 <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">{summary.pending}</p>
               </div>
             </div>
 
-            <div className="rounded-lg border border-border bg-background p-2.5">
-              <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
+            <div className="rounded-2xl border border-border/60 bg-background/80 p-3 shadow-sm">
+              <div className="mb-1.5 flex items-center justify-between text-xs text-muted-foreground">
                 <span className="flex items-center gap-1"><Target className="w-3.5 h-3.5" /> Progress</span>
                 <span>{summary.progress}%</span>
               </div>
@@ -735,8 +908,8 @@ function TaskPipelineBoard({ tasks, isLoading, onNavigateToChat, projectName, on
                   );
 
                 return (
-                  <div key={stage} className="rounded-lg border border-border overflow-hidden pb-2">
-                    <div className="flex items-center hover:bg-muted/40">
+                  <div key={stage} className="overflow-hidden rounded-2xl border border-border/60 bg-background/65 pb-2 shadow-sm">
+                    <div className="flex items-center hover:bg-muted/30">
                       <button
                         type="button"
                         onClick={() => toggleStage(stage)}
@@ -756,7 +929,7 @@ function TaskPipelineBoard({ tasks, isLoading, onNavigateToChat, projectName, on
                       </button>
                     </div>
                     {isOpen && (
-                      <div className="border-t border-border bg-background/60">
+                      <div className="border-t border-border/60 bg-background/60">
                         {/* Insertion point before first task */}
                         {renderInsertionPoint(null, `${stage}-insert-top`)}
                         {stageTasks.map((task) => {
@@ -970,48 +1143,58 @@ function ArtifactsCard({ artifacts, onSelect, selectedPath }) {
   const toggle = (stage, defaultOpen) => setOpenStages(prev => ({ ...prev, [stage]: !(prev[stage] ?? defaultOpen) }));
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+    <div className="rounded-[30px] border border-border/60 bg-card/78 p-5 shadow-sm backdrop-blur">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <Beaker className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
-          Artifacts Explorer
-        </h3>
-        <span className="text-xs text-muted-foreground">{artifacts.length} files</span>
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-cyan-200/70 bg-cyan-50/90 text-cyan-700 dark:border-cyan-900/70 dark:bg-cyan-950/30 dark:text-cyan-300">
+            <Beaker className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-base font-semibold tracking-tight text-foreground">
+              Artifacts Explorer
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Inspect outputs from survey, ideation, experiments, and publication
+            </p>
+          </div>
+        </div>
+        <span className="rounded-full border border-border/60 bg-background/75 px-3 py-1 text-xs text-muted-foreground shadow-sm">
+          {artifacts.length} files
+        </span>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Browse artifacts generated across the 5-stage pipeline: Survey, Ideation, Experiment, Publication, and Promotion.
-      </p>
       {artifacts.length === 0 ? (
-        <div className="text-xs text-muted-foreground rounded-md border border-dashed border-border px-3 py-4">
+        <div className="rounded-2xl border border-dashed border-border/60 bg-background/65 px-4 py-5 text-xs text-muted-foreground">
           No stage artifacts found yet. Use the <code className="bg-muted px-1 rounded">inno-pipeline-planner</code> skill in Chat to start a pipeline, then refresh after tasks run.
         </div>
       ) : (
-        <div className="space-y-1 max-h-[320px] overflow-y-auto pr-1">
+        <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
           {sorted.map(g => {
             const Icon = g.icon;
             const isStageSelected = g.files.some((file) => file.relativePath === selectedPath);
             const defaultOpen = isStageSelected || (!selectedPath && sorted[0]?.stage === g.stage);
             const isOpen = openStages[g.stage] ?? defaultOpen;
             return (
-              <div key={g.stage}>
+              <div key={g.stage} className="overflow-hidden rounded-2xl border border-border/60 bg-background/65 shadow-sm">
                 <button onClick={() => toggle(g.stage, defaultOpen)}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted/50 text-sm">
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-muted/30">
                   {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                  <Icon className="w-4 h-4" />
+                  <div className="flex h-7 w-7 items-center justify-center rounded-xl border border-border/60 bg-background/90">
+                    <Icon className="w-4 h-4" />
+                  </div>
                   <span className="font-medium text-foreground">{g.stage}</span>
                   <span className={`ml-auto text-xs px-1.5 py-0 rounded ${BADGE_COLORS[g.color]}`}>
                     {g.files.length}
                   </span>
                 </button>
                 {isOpen && (
-                  <ul className="ml-6 pl-2 border-l border-border space-y-0.5 py-1">
+                  <ul className="mx-3 mb-3 border-l border-border pl-3 space-y-1">
                     {g.files.map(f => (
                       <li key={f.relativePath}>
                         <button onClick={() => onSelect(f)}
-                          className={`w-full text-left px-2 py-1 rounded text-xs flex items-center gap-1.5 truncate ${
+                          className={`flex w-full items-center gap-1.5 truncate rounded-xl px-3 py-2 text-left text-xs ${
                             selectedPath === f.relativePath
-                              ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200'
-                              : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                              ? 'bg-blue-100 text-blue-800 shadow-sm dark:bg-blue-900/40 dark:text-blue-200'
+                              : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'
                           }`}>
                           <FileText className="w-3.5 h-3.5 flex-shrink-0" />
                           <span className="truncate">{f.name}</span>
@@ -1234,10 +1417,10 @@ function IdeaCard({ projectName, config, projectFileSet }) {
   if (!ideaText) return null;
 
   return (
-    <div className="rounded-lg border border-border bg-card overflow-hidden">
+    <div className="overflow-hidden rounded-[30px] border border-border/60 bg-card/78 shadow-sm backdrop-blur">
       {/* Header */}
       <div
-        className="flex items-center justify-between px-4 py-2.5 cursor-pointer hover:bg-muted/30 transition-colors"
+        className="flex cursor-pointer items-center justify-between border-b border-border/60 bg-gradient-to-r from-amber-50 via-orange-50 to-white px-5 py-4 transition-colors hover:bg-muted/30 dark:from-slate-950 dark:via-amber-950/20 dark:to-slate-950"
         onClick={() => setExpanded(!expanded)}
       >
         <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
@@ -1261,7 +1444,7 @@ function IdeaCard({ projectName, config, projectFileSet }) {
 
       {/* Body — markdown rendered */}
       {expanded && (
-        <div className="border-t border-border px-5 py-4 max-h-[600px] overflow-y-auto">
+        <div className="max-h-[600px] overflow-y-auto px-5 py-4">
           <ReactMarkdown
             remarkPlugins={remarkPlugins}
             rehypePlugins={rehypePlugins}
@@ -1309,9 +1492,9 @@ function PaperCard({ projectName, projectRoot }) {
   }, [projectName, projectRoot]);
 
   return (
-    <div className="rounded-lg border border-border bg-card overflow-hidden">
+    <div className="overflow-hidden rounded-[30px] border border-border/60 bg-card/78 shadow-sm backdrop-blur">
       <div
-        className="flex items-center justify-between px-4 py-2.5 cursor-pointer hover:bg-muted/30 transition-colors"
+        className="flex cursor-pointer items-center justify-between border-b border-border/60 bg-gradient-to-r from-purple-50 via-fuchsia-50 to-white px-5 py-4 transition-colors hover:bg-muted/30 dark:from-slate-950 dark:via-purple-950/20 dark:to-slate-950"
         onClick={() => setExpanded(!expanded)}
       >
         <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
@@ -1374,16 +1557,43 @@ function FileViewer({ projectName, file, onClose }) {
   const [dirty, setDirty] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
   const [loadError, setLoadError] = useState(null);
+  const [viewMode, setViewMode] = useState('preview');
+  const [showExpandedPreview, setShowExpandedPreview] = useState(false);
   const previewKind = useMemo(() => getArtifactPreviewKind(file), [file]);
-  const isTextEditable = previewKind === 'text';
+  const isPreviewRenderable = previewKind === 'markdown' || previewKind === 'html';
+  const isTextEditable = previewKind === 'text' || previewKind === 'markdown' || previewKind === 'html';
   const supportsBlobPreview = previewKind === 'pdf' || previewKind === 'image' || previewKind === 'audio' || previewKind === 'video';
+  const canExpandPreview = previewKind !== 'unsupported';
   const viewerHeight = previewKind === 'pdf'
     ? '70vh'
     : previewKind === 'video'
       ? '32rem'
       : previewKind === 'image'
         ? '30rem'
-        : '28rem';
+        : previewKind === 'markdown' || previewKind === 'html'
+          ? '40rem'
+          : '28rem';
+
+  useEffect(() => {
+    setViewMode(isPreviewRenderable ? 'preview' : 'edit');
+  }, [file?.relativePath, isPreviewRenderable]);
+
+  useEffect(() => {
+    setShowExpandedPreview(false);
+  }, [file?.relativePath]);
+
+  useEffect(() => {
+    if (!showExpandedPreview) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setShowExpandedPreview(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showExpandedPreview]);
 
   useEffect(() => {
     if (!file) return;
@@ -1473,42 +1683,21 @@ function FileViewer({ projectName, file, onClose }) {
     }
   };
 
-  if (!file) return null;
+  const renderPreviewContent = (expanded = false) => {
+    if (loading) {
+      return <div className="flex-1 min-h-0 p-4 text-sm text-muted-foreground">Loading...</div>;
+    }
 
-  return (
-    <div
-      className="rounded-lg border border-border bg-card flex flex-col overflow-hidden resize-y min-h-[320px] max-h-[85vh]"
-      style={{ height: viewerHeight }}
-    >
-      <div className="border-b border-border px-3 py-2 flex items-center justify-between flex-shrink-0 bg-muted/30">
-        <span className="text-xs font-medium text-foreground truncate flex-1 mr-2">{file.relativePath}</span>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {saveStatus === 'saved' && <span className="text-xs text-green-600">Saved</span>}
-          {saveStatus === 'error' && <span className="text-xs text-red-600">Failed</span>}
-          {blobUrl && supportsBlobPreview && (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => window.open(blobUrl, '_blank', 'noopener')}
-            >
-              <ExternalLink className="w-3.5 h-3.5 mr-1" /> Open
-            </Button>
-          )}
-          {isTextEditable && (
-            <Button size="sm" variant="ghost" onClick={handleSave} disabled={!dirty || loading}>
-              <Save className="w-3.5 h-3.5 mr-1" /> Save
-            </Button>
-          )}
-          <Button size="sm" variant="ghost" onClick={onClose}>✕</Button>
-        </div>
-      </div>
-      {loading ? (
-        <div className="flex-1 min-h-0 p-4 text-sm text-muted-foreground">Loading...</div>
-      ) : loadError ? (
+    if (loadError) {
+      return (
         <div className="flex-1 min-h-0 p-4 text-sm text-destructive">
           Failed to load preview. {loadError}
         </div>
-      ) : previewKind === 'pdf' && blobUrl ? (
+      );
+    }
+
+    if (previewKind === 'pdf' && blobUrl) {
+      return (
         <div className="flex-1 min-h-0 bg-background">
           <iframe
             title={file.name}
@@ -1516,44 +1705,195 @@ function FileViewer({ projectName, file, onClose }) {
             className="w-full h-full border-0"
           />
         </div>
-      ) : previewKind === 'image' && blobUrl ? (
+      );
+    }
+
+    if (previewKind === 'image' && blobUrl) {
+      return (
         <div className="flex-1 min-h-0 bg-muted/10 overflow-auto p-3">
           <img
             src={blobUrl}
             alt={file.name}
-            className="max-w-full h-auto mx-auto rounded-md border border-border"
+            className={`${expanded ? 'max-h-none w-auto max-w-full' : 'max-w-full h-auto'} mx-auto rounded-md border border-border`}
           />
         </div>
-      ) : previewKind === 'audio' && blobUrl ? (
-        <div className="flex-1 min-h-0 p-4 flex items-center justify-center bg-background">
+      );
+    }
+
+    if (previewKind === 'audio' && blobUrl) {
+      return (
+        <div className="flex min-h-0 flex-1 items-center justify-center bg-background p-4">
           <audio src={blobUrl} controls className="w-full max-w-md" />
         </div>
-      ) : previewKind === 'video' && blobUrl ? (
+      );
+    }
+
+    if (previewKind === 'video' && blobUrl) {
+      return (
         <div className="flex-1 min-h-0 bg-background p-3">
-          <video src={blobUrl} controls className="w-full h-full rounded-md border border-border bg-black" />
+          <video src={blobUrl} controls className="h-full w-full rounded-md border border-border bg-black" />
         </div>
-      ) : previewKind === 'unsupported' ? (
+      );
+    }
+
+    if (previewKind === 'html' && viewMode === 'preview') {
+      return (
+        <div className="flex-1 min-h-0 overflow-auto bg-muted/10 p-3">
+          <iframe
+            title={file.name}
+            srcDoc={content}
+            sandbox="allow-scripts allow-same-origin"
+            className={`w-full rounded-2xl border border-border/60 bg-white shadow-sm ${expanded ? 'h-full min-h-[72vh]' : 'h-full min-h-[32rem]'}`}
+          />
+        </div>
+      );
+    }
+
+    if (previewKind === 'markdown' && viewMode === 'preview') {
+      return (
+        <div className="flex-1 min-h-0 overflow-auto bg-muted/10 p-4">
+          <div className={`prose max-w-none rounded-2xl border border-border/60 bg-background/80 shadow-sm dark:prose-invert ${expanded ? 'prose-base p-8' : 'prose-sm p-6'}`}>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm, remarkMath]}
+              rehypePlugins={[rehypeKatex]}
+              components={markdownComponents}
+            >
+              {content}
+            </ReactMarkdown>
+          </div>
+        </div>
+      );
+    }
+
+    if (previewKind === 'unsupported') {
+      return (
         <div className="flex-1 min-h-0 p-4 text-sm text-muted-foreground">
           This file type cannot be previewed inline here yet.
         </div>
-      ) : (
-        <textarea
-          className="flex-1 min-h-0 h-full w-full p-3 text-xs font-mono bg-background border-0 resize-none focus:outline-none focus:ring-0 text-foreground"
-          value={content}
-          onChange={e => { setContent(e.target.value); setDirty(true); }}
-          spellCheck={false}
-        />
+      );
+    }
+
+    return (
+      <textarea
+        className={`flex-1 min-h-0 h-full w-full border-0 bg-background font-mono text-foreground resize-none focus:outline-none focus:ring-0 ${expanded ? 'p-5 text-sm' : 'p-3 text-xs'}`}
+        value={content}
+        onChange={e => { setContent(e.target.value); setDirty(true); }}
+        spellCheck={false}
+      />
+    );
+  };
+
+  const renderToolbarActions = () => (
+    <>
+      {saveStatus === 'saved' && <span className="text-xs text-green-600">Saved</span>}
+      {saveStatus === 'error' && <span className="text-xs text-red-600">Failed</span>}
+      {isPreviewRenderable && (
+        <div className="flex items-center rounded-full border border-border/60 bg-background/75 p-0.5 shadow-sm">
+          <button
+            type="button"
+            className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+              viewMode === 'preview'
+                ? 'bg-foreground text-background'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+            onClick={() => setViewMode('preview')}
+          >
+            Preview
+          </button>
+          <button
+            type="button"
+            className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+              viewMode === 'edit'
+                ? 'bg-foreground text-background'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+            onClick={() => setViewMode('edit')}
+          >
+            Edit
+          </button>
+        </div>
       )}
-    </div>
+      {canExpandPreview && !showExpandedPreview && (
+        <Button size="sm" variant="ghost" onClick={() => setShowExpandedPreview(true)} disabled={loading}>
+          <Maximize2 className="w-3.5 h-3.5 mr-1" />
+          Expand
+        </Button>
+      )}
+      {blobUrl && supportsBlobPreview && (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => window.open(blobUrl, '_blank', 'noopener')}
+        >
+          <ExternalLink className="w-3.5 h-3.5 mr-1" /> Open
+        </Button>
+      )}
+      {isTextEditable && (
+        <Button size="sm" variant="ghost" onClick={handleSave} disabled={!dirty || loading}>
+          <Save className="w-3.5 h-3.5 mr-1" /> Save
+        </Button>
+      )}
+    </>
+  );
+
+  if (!file) return null;
+
+  return (
+    <>
+      <div
+        className="flex min-h-[320px] max-h-[85vh] flex-col overflow-hidden rounded-[30px] border border-border/60 bg-card/80 shadow-sm backdrop-blur resize-y"
+        style={{ height: viewerHeight }}
+      >
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-border/60 bg-gradient-to-r from-slate-50 via-white to-cyan-50 px-4 py-3 dark:from-slate-950 dark:via-slate-900 dark:to-cyan-950/20">
+          <span className="text-xs font-medium text-foreground truncate flex-1 mr-2">{file.relativePath}</span>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {renderToolbarActions()}
+            <Button size="sm" variant="ghost" onClick={onClose}>✕</Button>
+          </div>
+        </div>
+        {renderPreviewContent(false)}
+      </div>
+
+      {showExpandedPreview && ReactDOM.createPortal(
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm md:p-6"
+          onClick={() => setShowExpandedPreview(false)}
+        >
+          <div
+            className="flex h-full w-full max-w-7xl flex-col overflow-hidden rounded-[34px] border border-border/70 bg-background shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex flex-shrink-0 items-center justify-between border-b border-border/60 bg-gradient-to-r from-slate-50 via-white to-cyan-50 px-5 py-4 dark:from-slate-950 dark:via-slate-900 dark:to-cyan-950/20">
+              <div className="min-w-0 pr-4">
+                <div className="truncate text-sm font-semibold text-foreground">{file.name}</div>
+                <div className="truncate text-xs text-muted-foreground">{file.relativePath}</div>
+              </div>
+              <div className="flex items-center gap-2">
+                {renderToolbarActions()}
+                <Button size="sm" variant="ghost" onClick={() => setShowExpandedPreview(false)}>
+                  Close
+                </Button>
+              </div>
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              {renderPreviewContent(true)}
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
 
 function ArtifactPreviewEmptyState({ hasArtifacts }) {
   return (
-    <div className="rounded-lg border border-dashed border-border bg-card/60 px-4 py-8 text-center">
-      <FileText className="w-8 h-8 mx-auto text-muted-foreground/60" />
-      <h3 className="mt-3 text-sm font-semibold text-foreground">Artifact Preview</h3>
-      <p className="mt-1 text-xs text-muted-foreground max-w-xs mx-auto">
+    <div className="rounded-[28px] border border-dashed border-border/60 bg-card/65 px-5 py-10 text-center shadow-sm backdrop-blur">
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-border/60 bg-background/85 shadow-sm">
+        <FileText className="h-6 w-6 text-muted-foreground/70" />
+      </div>
+      <h3 className="mt-4 text-sm font-semibold text-foreground">Artifact Preview</h3>
+      <p className="mx-auto mt-2 max-w-xs text-xs text-muted-foreground">
         {hasArtifacts
           ? 'Choose a file from Artifacts Explorer to inspect or edit it here.'
           : 'Run the pipeline first, then preview generated artifacts here.'}
@@ -1566,22 +1906,25 @@ function UsageGuideNotice({ t, onNavigateToChat }) {
   const guideSteps = ['step1', 'step2', 'step3', 'step4', 'step5'];
 
   return (
-    <div className="rounded-lg border border-blue-300/60 dark:border-blue-700/60 bg-blue-50/80 dark:bg-blue-900/20 p-4">
+    <div className="relative overflow-hidden rounded-[28px] border border-sky-200/70 bg-[radial-gradient(circle_at_top_left,rgba(125,211,252,0.24),transparent_38%),linear-gradient(180deg,rgba(248,250,252,0.96),rgba(239,246,255,0.94))] p-5 shadow-sm dark:border-sky-900/70 dark:bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.18),transparent_38%),linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,6,23,0.94))]">
+      <div className="absolute -right-10 -top-8 h-28 w-28 rounded-full bg-sky-200/40 blur-3xl dark:bg-sky-500/10" />
       <div className="flex items-start gap-3">
-        <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200">
+        <div className="relative flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl border border-sky-200/80 bg-white/80 text-sky-700 shadow-sm dark:border-sky-900/70 dark:bg-slate-950/50 dark:text-sky-300">
+          <AlertCircle className="w-5 h-5" />
+        </div>
+        <div className="relative space-y-3">
+          <h3 className="text-base font-semibold tracking-tight text-slate-900 dark:text-sky-100">
             {t('researchLabGuide.title')}
           </h3>
-          <p className="text-xs text-blue-900/90 dark:text-blue-200/90">
+          <p className="text-sm leading-6 text-slate-700 dark:text-sky-100/85">
             {t('researchLabGuide.description')}
           </p>
-          <ol className="list-decimal pl-4 space-y-1 text-xs text-blue-900/90 dark:text-blue-200/90">
+          <ol className="list-decimal pl-4 space-y-1.5 text-sm text-slate-700 dark:text-sky-100/85">
             {guideSteps.map((key) => (
               <li key={key}>{t(`researchLabGuide.${key}`)}</li>
             ))}
           </ol>
-          <p className="text-xs font-medium text-blue-900 dark:text-blue-200">
+          <p className="text-xs font-medium uppercase tracking-[0.22em] text-slate-600 dark:text-sky-100/75">
             {t('researchLabGuide.interfaceMap')}
           </p>
           {onNavigateToChat && (
@@ -1745,6 +2088,17 @@ function ResearchLab({ selectedProject, onNavigateToChat }) {
     });
   }, [artifacts, projectName]);
 
+  const normalizedTasks = useMemo(() => normalizeTasks(tasks), [tasks]);
+  const taskSummary = useMemo(() => buildTaskSummary(normalizedTasks), [normalizedTasks]);
+  const pipelineStageOverview = useMemo(
+    () => buildPipelineStageOverview(normalizedTasks, artifacts),
+    [normalizedTasks, artifacts],
+  );
+  const nextTask = useMemo(() => getNextTask(normalizedTasks), [normalizedTasks]);
+  const sourcePapers = useMemo(() => getSourcePapers(instance), [instance]);
+  const projectTitle = selectedProject?.displayName || selectedProject?.name || 'Research Project';
+  const liveStageCount = pipelineStageOverview.filter((stage) => stage.total > 0 || stage.artifacts > 0).length;
+  const hasPaperPreview = projectFileSet?.has('Publication/paper/main.pdf');
   const hasContent = instance || config || artifacts.length > 0 || tasks.length > 0;
   const sidebar = (
     <div className="space-y-4">
@@ -1775,33 +2129,155 @@ function ResearchLab({ selectedProject, onNavigateToChat }) {
   }
 
   return (
-    <div className="h-full flex flex-col bg-background">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-2 flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <FlaskConical className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-          <span className="font-medium text-foreground">
-            {t('tabs.researchLab') || 'Research Lab'}
-          </span>
+    <div className="flex h-full flex-col bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.12),transparent_24%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.10),transparent_20%),linear-gradient(180deg,rgba(248,250,252,0.96),rgba(255,255,255,0.94))] dark:bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.12),transparent_24%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.10),transparent_20%),linear-gradient(180deg,rgba(2,6,23,0.98),rgba(15,23,42,0.98))]">
+      <div className="flex flex-shrink-0 items-center justify-between border-b border-border/60 bg-background/75 px-4 py-3 backdrop-blur-xl">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-blue-200/70 bg-blue-50/85 text-blue-700 shadow-sm dark:border-blue-900/70 dark:bg-blue-950/30 dark:text-blue-300">
+            <FlaskConical className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="font-medium text-foreground">
+              {t('tabs.researchLab') || 'Research Lab'}
+            </div>
+            <div className="truncate text-xs text-muted-foreground">
+              {projectTitle}
+            </div>
+          </div>
           {config?.task_level && (
-            <Badge variant="outline" className="text-xs">
+            <Badge variant="outline" className="hidden text-xs sm:inline-flex">
               {config.task_level === 'task1' ? 'Plan' : 'Idea'}
             </Badge>
           )}
         </div>
-        <Button variant="ghost" size="sm" onClick={loadData} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-        </Button>
+        <div className="flex items-center gap-2">
+          {nextTask && onNavigateToChat && (
+            <Button
+              size="sm"
+              className="hidden rounded-full text-white shadow-[0_10px_24px_rgba(14,165,233,0.28)] sm:inline-flex bg-gradient-to-r from-cyan-500 via-sky-500 to-emerald-500 hover:from-cyan-400 hover:via-sky-400 hover:to-emerald-400"
+              onClick={() => onNavigateToChat()}
+            >
+              <MessageSquare className="mr-1.5 h-4 w-4" />
+              Continue in Chat
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" onClick={loadData} disabled={loading} className="rounded-full">
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
       </div>
 
-      {/* Body */}
       <ScrollArea className="flex-1">
-        <div className="p-4 max-w-[1380px] mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px] gap-4 items-start">
-            <div className="space-y-4 min-w-0">
-              <UsageGuideNotice t={t} onNavigateToChat={onNavigateToChat} />
+        <div className="mx-auto max-w-[1480px] p-4 sm:p-6">
+          <section className="relative overflow-hidden rounded-[36px] border border-border/60 bg-[radial-gradient(circle_at_top_left,rgba(125,211,252,0.28),transparent_34%),linear-gradient(135deg,rgba(248,250,252,0.96),rgba(240,249,255,0.90))] p-6 shadow-[0_24px_60px_rgba(15,23,42,0.08)] dark:bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.18),transparent_34%),linear-gradient(135deg,rgba(2,6,23,0.96),rgba(15,23,42,0.92))] dark:shadow-[0_28px_70px_rgba(2,6,23,0.45)] sm:p-7">
+            <div className="absolute -right-10 -top-10 h-44 w-44 rounded-full bg-sky-200/50 blur-3xl dark:bg-sky-500/15" />
+            <div className="absolute bottom-0 right-24 h-28 w-28 rounded-full bg-emerald-200/40 blur-2xl dark:bg-emerald-500/10" />
+            <div className="relative grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.9fr)]">
+              <div className="min-w-0">
+                <div className="inline-flex items-center gap-2 rounded-full border border-sky-200/70 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.24em] text-sky-700 shadow-sm dark:border-sky-900/70 dark:bg-slate-950/50 dark:text-sky-200">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Live Research Workspace
+                </div>
+                <h2 className="mt-4 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+                  {projectTitle}
+                </h2>
+                <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
+                  Track every stage of the research pipeline, review generated artifacts, and jump back into execution without leaving the lab view.
+                </p>
 
-              <div className="lg:hidden">
+                <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <ResearchMetricCard
+                    icon={ListChecks}
+                    label="Tasks"
+                    value={taskSummary.total}
+                    detail={taskSummary.total > 0 ? `${taskSummary.progress}% complete` : 'No pipeline tasks yet'}
+                    accentClass="border-cyan-200/80 bg-cyan-100/80 text-cyan-700 dark:border-cyan-900/60 dark:bg-cyan-950/40 dark:text-cyan-200"
+                  />
+                  <ResearchMetricCard
+                    icon={Target}
+                    label="Completed"
+                    value={taskSummary.done}
+                    detail={taskSummary.inProgress > 0 ? `${taskSummary.inProgress} active now` : `${taskSummary.pending} pending`}
+                    accentClass="border-emerald-200/80 bg-emerald-100/80 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200"
+                  />
+                  <ResearchMetricCard
+                    icon={Beaker}
+                    label="Artifacts"
+                    value={artifacts.length}
+                    detail={artifacts.length > 0 ? `${liveStageCount} pipeline stages populated` : 'No outputs yet'}
+                    accentClass="border-blue-200/80 bg-blue-100/80 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-200"
+                  />
+                  <ResearchMetricCard
+                    icon={BookOpen}
+                    label="Sources"
+                    value={sourcePapers.length}
+                    detail={sourcePapers.length > 0 ? 'Loaded from instance metadata' : 'No papers attached yet'}
+                    accentClass="border-amber-200/80 bg-amber-100/80 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200"
+                  />
+                </div>
+
+                <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                  {pipelineStageOverview.map((stage) => (
+                    <PipelineStageChip key={stage.key} stage={stage} />
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid gap-4">
+                <div className="rounded-[28px] border border-border/60 bg-card/78 p-5 shadow-sm backdrop-blur">
+                  <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    <MessageSquare className="h-4 w-4 text-primary" />
+                    Next Action
+                  </div>
+                  {nextTask ? (
+                    <div className="mt-4 rounded-2xl border border-border/60 bg-background/70 p-4 shadow-sm">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${TASK_STAGE_META[nextTask.stage]?.className || TASK_STAGE_META.unassigned.className}`}>
+                            {TASK_STAGE_META[nextTask.stage]?.label || TASK_STAGE_META.unassigned.label}
+                          </span>
+                          <div className="mt-3 text-lg font-semibold tracking-tight text-foreground">
+                            {nextTask.title || t('researchLabTaskBoard.untitledTask')}
+                          </div>
+                          {nextTask.description ? (
+                            <p className="mt-2 text-sm leading-6 text-muted-foreground line-clamp-3">
+                              {nextTask.description}
+                            </p>
+                          ) : null}
+                        </div>
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${TASK_STATUS_META[nextTask.status]?.className || TASK_STATUS_META.pending.className}`}>
+                          {TASK_STATUS_META[nextTask.status]?.label || TASK_STATUS_META.pending.label}
+                        </span>
+                      </div>
+                      {onNavigateToChat && (
+                        <Button
+                          className="mt-4 rounded-full text-white bg-gradient-to-r from-cyan-500 via-sky-500 to-emerald-500 hover:from-cyan-400 hover:via-sky-400 hover:to-emerald-400"
+                          onClick={() => onNavigateToChat()}
+                        >
+                          <Sparkles className="mr-1.5 h-4 w-4" />
+                          Go to Chat
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="mt-4 rounded-2xl border border-dashed border-border/60 bg-background/60 px-4 py-5 text-sm text-muted-foreground">
+                      Generate or sync the task pipeline in Chat, then return here to continue execution.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1.05fr)_420px]">
+            <div className="min-w-0 space-y-6">
+              <div className="grid gap-6 lg:grid-cols-2">
+                <OverviewCard instance={instance} config={config} />
+                <UsageGuideNotice t={t} onNavigateToChat={onNavigateToChat} />
+              </div>
+
+              {sourcePapers.length > 0 ? <PapersCard papers={sourcePapers} /> : null}
+
+              <div className="xl:hidden">
                 {sidebar}
               </div>
 
@@ -1813,24 +2289,37 @@ function ResearchLab({ selectedProject, onNavigateToChat }) {
                 onTaskUpdated={loadData}
               />
 
+              <IdeaCard
+                projectName={projectName}
+                config={config}
+                projectFileSet={projectFileSet}
+              />
+
+              {hasPaperPreview ? (
+                <PaperCard
+                  projectName={projectName}
+                  projectRoot={projectRoot}
+                />
+              ) : null}
+
               {loading && !hasContent ? (
-                <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">
+                <div className="flex h-40 items-center justify-center rounded-[28px] border border-border/60 bg-card/65 text-sm text-muted-foreground shadow-sm backdrop-blur">
                   Loading research data...
                 </div>
               ) : !hasContent ? (
-                <div className="flex flex-col items-center justify-center h-60 text-muted-foreground text-sm gap-3">
+                <div className="flex h-60 flex-col items-center justify-center gap-3 rounded-[30px] border border-dashed border-border/60 bg-card/65 text-sm text-muted-foreground shadow-sm backdrop-blur">
                   <FolderOpen className="w-14 h-14 opacity-40" />
                   <p>No research data found in this project.</p>
-                  <p className="text-xs max-w-md text-center">
+                  <p className="max-w-md text-center text-xs">
                     Use the <code className="bg-muted px-1 rounded">inno-pipeline-planner</code> skill in Chat to initialize the 5-stage research pipeline and its artifacts.
                   </p>
                 </div>
               ) : (
-                <div className="space-y-3" />
+                <div className="h-1" />
               )}
             </div>
 
-            <div className="hidden lg:block lg:sticky lg:top-4">
+            <div className="hidden xl:block xl:sticky xl:top-6">
               {sidebar}
             </div>
           </div>
