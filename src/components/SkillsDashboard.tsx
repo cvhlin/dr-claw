@@ -25,7 +25,7 @@ type SkillNode = {
   children?: SkillNode[];
 };
 
-type SkillTagType = 'domain' | 'stage' | 'meta';
+type SkillTagType = 'intent' | 'capability' | 'domain' | 'status' | 'source' | 'stage' | 'meta';
 
 type SkillTag = {
   label: string;
@@ -59,6 +59,7 @@ type SkillSummary = {
   fullDescription: string;
   tags: SkillTag[];
   hasSkillMd: boolean;
+  taxonomy: SkillTaxonomyRecord | null;
 };
 
 type FacetOption = {
@@ -75,19 +76,73 @@ type SkillRelation = {
 };
 
 type SkillExplorerSeed = SkillSummary & {
-  topLevelGroupKey: string;
-  topLevelGroupLabel: string;
-  collectionKey: string;
-  collectionLabel: string;
+  primaryIntentKey: string;
+  primaryIntentLabel: string;
+  intentLabels: string[];
+  capabilityKeys: string[];
+  capabilityLabels: string[];
+  domainKeys: string[];
+  domainLabels: string[];
+  keywordLabels: string[];
   primaryDomainKey: string;
   primaryDomainLabel: string;
-  isPlatformNative: boolean;
-  isStandalone: boolean;
+  sourceKey: string;
+  sourceLabel: string;
+  statusKey: string;
+  statusLabel: string;
+  owner?: string;
+  legacyCollectionLabel: string;
+  legacyGroupLabel: string;
   searchText: string;
+  relatedSkillNames: string[];
 };
 
 type SkillExplorerItem = SkillExplorerSeed & {
   relatedSkills: SkillRelation[];
+};
+
+type SkillCatalogV2Record = {
+  name: string;
+  primaryIntent: string;
+  intents: string[];
+  capabilities: string[];
+  domains: string[];
+  keywords?: string[];
+  source: string;
+  status: string;
+  summary: string;
+  relatedSkills?: string[];
+  owner?: string;
+  legacy?: {
+    dirPath?: string;
+    skillFile?: string;
+    topLevelGroup?: string;
+    collection?: string;
+    domain?: string;
+  };
+};
+
+type SkillCatalogV2File = {
+  skills?: SkillCatalogV2Record[];
+};
+
+type SkillTaxonomyFacet = {
+  key: string;
+  label: string;
+};
+
+type SkillTaxonomyRecord = {
+  primaryIntent: SkillTaxonomyFacet;
+  intents: SkillTaxonomyFacet[];
+  capabilities: SkillTaxonomyFacet[];
+  domains: SkillTaxonomyFacet[];
+  keywords: string[];
+  source: SkillTaxonomyFacet;
+  status: SkillTaxonomyFacet;
+  relatedSkillNames: string[];
+  owner?: string;
+  legacyCollectionLabel?: string;
+  legacyGroupLabel?: string;
 };
 
 const STAGE_RULES: Array<{ test: RegExp; tag: LocalizedLabel }> = [
@@ -115,6 +170,50 @@ const EMPTY_TAG_MAPPING: SkillTagMapping = {
   stageOverrides: {},
   domainOverrides: {},
   platformNativeSkills: new Set<string>(),
+};
+
+const INTENT_LABELS: Record<string, LocalizedLabel> = {
+  research: { zh: '调研', en: 'Research', ko: 'Research' },
+  ideation: { zh: '想法生成', en: 'Ideation', ko: 'Ideation' },
+  data: { zh: '数据处理', en: 'Data', ko: 'Data' },
+  experiment: { zh: '实验开发', en: 'Experiment', ko: 'Experiment' },
+  training: { zh: '模型训练', en: 'Training', ko: 'Training' },
+  evaluation: { zh: '评测分析', en: 'Evaluation', ko: 'Evaluation' },
+  writing: { zh: '论文与汇报', en: 'Writing', ko: 'Writing' },
+  deployment: { zh: '部署集成', en: 'Deployment', ko: 'Deployment' },
+};
+
+const CAPABILITY_LABELS: Record<string, LocalizedLabel> = {
+  'search-retrieval': { zh: '检索搜索', en: 'Search & Retrieval', ko: 'Search & Retrieval' },
+  'research-planning': { zh: '研究规划', en: 'Research Planning', ko: 'Research Planning' },
+  'agent-workflow': { zh: 'Agent 工作流', en: 'Agent Workflow', ko: 'Agent Workflow' },
+  'data-processing': { zh: '数据处理', en: 'Data Processing', ko: 'Data Processing' },
+  'training-tuning': { zh: '训练与调优', en: 'Training & Tuning', ko: 'Training & Tuning' },
+  'inference-serving': { zh: '推理与服务', en: 'Inference & Serving', ko: 'Inference & Serving' },
+  'evaluation-benchmarking': { zh: '评测与基准', en: 'Evaluation & Benchmarking', ko: 'Evaluation & Benchmarking' },
+  'prompt-structured-output': { zh: '提示与结构化输出', en: 'Prompt & Structured Output', ko: 'Prompt & Structured Output' },
+  multimodal: { zh: '多模态', en: 'Multimodal', ko: 'Multimodal' },
+  interpretability: { zh: '可解释性', en: 'Interpretability', ko: 'Interpretability' },
+  'safety-alignment': { zh: '安全与对齐', en: 'Safety & Alignment', ko: 'Safety & Alignment' },
+  'infrastructure-ops': { zh: '基础设施与运维', en: 'Infrastructure & Ops', ko: 'Infrastructure & Ops' },
+  'visualization-reporting': { zh: '可视化与汇报', en: 'Visualization & Reporting', ko: 'Visualization & Reporting' },
+};
+
+const TAXONOMY_DOMAIN_LABELS: Record<string, LocalizedLabel> = {
+  general: { zh: '通用', en: 'General', ko: 'General' },
+  'cs-ai': { zh: 'CS / AI', en: 'CS / AI', ko: 'CS / AI' },
+  bioinformatics: { zh: '生物信息学', en: 'Bioinformatics', ko: 'Bioinformatics' },
+  medical: { zh: '医疗', en: 'Medical', ko: 'Medical' },
+  vision: { zh: '视觉', en: 'Vision', ko: 'Vision' },
+  nlp: { zh: 'NLP', en: 'NLP', ko: 'NLP' },
+  'data-engineering': { zh: '数据工程', en: 'Data Engineering', ko: 'Data Engineering' },
+};
+
+const STATUS_LABELS: Record<string, LocalizedLabel> = {
+  candidate: { zh: '待校正', en: 'Candidate', ko: 'Candidate' },
+  verified: { zh: '已校正', en: 'Verified', ko: 'Verified' },
+  experimental: { zh: '实验中', en: 'Experimental', ko: 'Experimental' },
+  deprecated: { zh: '已废弃', en: 'Deprecated', ko: 'Deprecated' },
 };
 
 const PATH_GROUP_LABELS: Record<string, string> = {
@@ -178,12 +277,12 @@ const UI_TEXT: Record<LocaleKey, Record<string, string>> = {
   zh: {
     loading: '加载技能中...',
     title: '技能导航',
-    subtitle: '按分类、目录和来源浏览 100+ 技能，而不是在卡片墙里逐个查找。',
+    subtitle: '按主意图、技术能力、领域和治理状态浏览 100+ 技能，而不是把工作流阶段和技术类别混在一起。',
     refresh: '刷新',
     noRoots: '当前项目中未找到技能目录。',
     notFoundRoots: '当前工作区未检测到可用技能。',
     noSkills: '暂未检测到技能。创建或关联技能后点击刷新。',
-    searchPlaceholder: '搜索技能名、目录、描述或标签...',
+    searchPlaceholder: '搜索技能名、意图、能力、领域或标签...',
     clearSearch: '清除搜索',
     allTags: '全部标签',
     noFilterResult: '当前筛选条件下没有技能，尝试清空搜索词或切换筛选。',
@@ -196,21 +295,23 @@ const UI_TEXT: Record<LocaleKey, Record<string, string>> = {
     sourcePlatformShort: 'VibeLab',
     sourceImportedShort: '导入',
     headerCount: '{{shown}}/{{total}} skills',
-    summaryCollections: '{{count}} 个分类',
-    summaryFolders: '{{count}} 个目录',
-    summaryWorkflows: '{{count}} 个自研技能',
-    summaryImported: '{{count}} 个导入技能',
+    summaryIntents: '{{count}} 个主意图',
+    summaryCapabilities: '{{count}} 个技术能力',
+    summaryDomains: '{{count}} 个领域',
+    summaryVerified: '{{count}} 个已校正技能',
     quickViews: '快速视图',
     allSkills: '全部技能',
     nativeSkills: '平台自研',
     communitySkills: '外部导入',
-    standaloneSkills: '独立技能',
-    collections: '主题分类',
-    folders: '目录分组',
+    verifiedSkills: '已校正',
+    intents: '主意图',
+    capabilities: '技术能力',
     domains: '领域',
-    allCollections: '全部分类',
-    allFolders: '全部目录',
+    statuses: '状态',
+    allIntents: '全部主意图',
+    allCapabilities: '全部技术能力',
     allDomains: '全部领域',
+    allStatuses: '全部状态',
     clearFilters: '清空筛选',
     results: '结果',
     resultsSummary: '当前显示 {{shown}} 个技能',
@@ -218,10 +319,16 @@ const UI_TEXT: Record<LocaleKey, Record<string, string>> = {
     relatedSkills: '相关技能',
     emptySelection: '选择一个技能以查看详情、标签和相关技能。',
     pathField: '路径',
-    collectionField: '分类',
-    folderField: '目录',
+    primaryIntentField: '主意图',
+    intentsField: '意图',
+    capabilitiesField: '能力',
     domainField: '领域',
     sourceField: '来源',
+    statusField: '状态',
+    ownerField: '维护者',
+    legacyField: '旧分类',
+    keywordsField: '关键词',
+    rawTagsField: '原始标签',
     standaloneGroup: '独立技能',
     noSkillFile: '根目录未检测到 SKILL.md',
     discardChanges: '放弃未保存的修改？',
@@ -249,12 +356,12 @@ const UI_TEXT: Record<LocaleKey, Record<string, string>> = {
   en: {
     loading: 'Loading skills...',
     title: 'Skill Explorer',
-    subtitle: 'Browse 100+ skills by collection, folder, and source instead of scanning a flat wall of cards.',
+    subtitle: 'Browse 100+ skills by primary intent, capability, domain, and governance state instead of mixing workflow stage with technical type.',
     refresh: 'Refresh',
     noRoots: 'No skill directories found in this project.',
     notFoundRoots: 'No skills are currently available in this workspace.',
     noSkills: 'No skills detected yet. Click Refresh after creating or linking skills.',
-    searchPlaceholder: 'Search skills, folders, descriptions, or tags...',
+    searchPlaceholder: 'Search skills, intents, capabilities, domains, or tags...',
     clearSearch: 'Clear search',
     allTags: 'All Tags',
     noFilterResult: 'No skills match the current filters. Try clearing search or switching filters.',
@@ -267,21 +374,23 @@ const UI_TEXT: Record<LocaleKey, Record<string, string>> = {
     sourcePlatformShort: 'VibeLab',
     sourceImportedShort: 'Imported',
     headerCount: '{{shown}}/{{total}} skills',
-    summaryCollections: '{{count}} collections',
-    summaryFolders: '{{count}} folders',
-    summaryWorkflows: '{{count}} native workflows',
-    summaryImported: '{{count}} imported skills',
+    summaryIntents: '{{count}} primary intents',
+    summaryCapabilities: '{{count}} capabilities',
+    summaryDomains: '{{count}} domains',
+    summaryVerified: '{{count}} verified skills',
     quickViews: 'Quick Views',
     allSkills: 'All Skills',
     nativeSkills: 'VibeLab',
     communitySkills: 'Imported',
-    standaloneSkills: 'Standalone',
-    collections: 'Collections',
-    folders: 'Folders',
+    verifiedSkills: 'Verified',
+    intents: 'Primary Intent',
+    capabilities: 'Capabilities',
     domains: 'Domains',
-    allCollections: 'All Collections',
-    allFolders: 'All Folders',
+    statuses: 'Status',
+    allIntents: 'All Intents',
+    allCapabilities: 'All Capabilities',
     allDomains: 'All Domains',
+    allStatuses: 'All Statuses',
     clearFilters: 'Clear Filters',
     results: 'Results',
     resultsSummary: '{{shown}} skills shown',
@@ -289,10 +398,16 @@ const UI_TEXT: Record<LocaleKey, Record<string, string>> = {
     relatedSkills: 'Related Skills',
     emptySelection: 'Select a skill to inspect its details, tags, and nearby skills.',
     pathField: 'Path',
-    collectionField: 'Collection',
-    folderField: 'Folder',
+    primaryIntentField: 'Primary Intent',
+    intentsField: 'Intents',
+    capabilitiesField: 'Capabilities',
     domainField: 'Domain',
     sourceField: 'Source',
+    statusField: 'Status',
+    ownerField: 'Owner',
+    legacyField: 'Legacy',
+    keywordsField: 'Keywords',
+    rawTagsField: 'Raw Tags',
     standaloneGroup: 'Standalone',
     noSkillFile: 'No root SKILL.md found',
     discardChanges: 'Discard unsaved changes?',
@@ -320,12 +435,12 @@ const UI_TEXT: Record<LocaleKey, Record<string, string>> = {
   ko: {
     loading: 'Loading skills...',
     title: 'Skill Explorer',
-    subtitle: 'Browse 100+ skills by collection, folder, and source instead of scanning a flat wall of cards.',
+    subtitle: 'Browse 100+ skills by primary intent, capability, domain, and governance state instead of mixing workflow stage with technical type.',
     refresh: 'Refresh',
     noRoots: 'No skill directories found in this project.',
     notFoundRoots: 'No skills are currently available in this workspace.',
     noSkills: 'No skills detected yet. Click Refresh after creating or linking skills.',
-    searchPlaceholder: 'Search skills, folders, descriptions, or tags...',
+    searchPlaceholder: 'Search skills, intents, capabilities, domains, or tags...',
     clearSearch: 'Clear search',
     allTags: 'All Tags',
     noFilterResult: 'No skills match the current filters. Try clearing search or switching filters.',
@@ -338,21 +453,23 @@ const UI_TEXT: Record<LocaleKey, Record<string, string>> = {
     sourcePlatformShort: 'VibeLab',
     sourceImportedShort: 'Imported',
     headerCount: '{{shown}}/{{total}} skills',
-    summaryCollections: '{{count}} collections',
-    summaryFolders: '{{count}} folders',
-    summaryWorkflows: '{{count}} native workflows',
-    summaryImported: '{{count}} imported skills',
+    summaryIntents: '{{count}} primary intents',
+    summaryCapabilities: '{{count}} capabilities',
+    summaryDomains: '{{count}} domains',
+    summaryVerified: '{{count}} verified skills',
     quickViews: 'Quick Views',
     allSkills: 'All Skills',
     nativeSkills: 'VibeLab',
     communitySkills: 'Imported',
-    standaloneSkills: 'Standalone',
-    collections: 'Collections',
-    folders: 'Folders',
+    verifiedSkills: 'Verified',
+    intents: 'Primary Intent',
+    capabilities: 'Capabilities',
     domains: 'Domains',
-    allCollections: 'All Collections',
-    allFolders: 'All Folders',
+    statuses: 'Status',
+    allIntents: 'All Intents',
+    allCapabilities: 'All Capabilities',
     allDomains: 'All Domains',
+    allStatuses: 'All Statuses',
     clearFilters: 'Clear Filters',
     results: 'Results',
     resultsSummary: '{{shown}} skills shown',
@@ -360,10 +477,16 @@ const UI_TEXT: Record<LocaleKey, Record<string, string>> = {
     relatedSkills: 'Related Skills',
     emptySelection: 'Select a skill to inspect its details, tags, and nearby skills.',
     pathField: 'Path',
-    collectionField: 'Collection',
-    folderField: 'Folder',
+    primaryIntentField: 'Primary Intent',
+    intentsField: 'Intents',
+    capabilitiesField: 'Capabilities',
     domainField: 'Domain',
     sourceField: 'Source',
+    statusField: 'Status',
+    ownerField: 'Owner',
+    legacyField: 'Legacy',
+    keywordsField: 'Keywords',
+    rawTagsField: 'Raw Tags',
     standaloneGroup: 'Standalone',
     noSkillFile: 'No root SKILL.md found',
     discardChanges: 'Discard unsaved changes?',
@@ -440,6 +563,95 @@ function parseTagMappingFile(payload: unknown): SkillTagMapping {
     domainOverrides,
     platformNativeSkills,
   };
+}
+
+function localizeTaxonomyValue(
+  type: 'intent' | 'capability' | 'domain' | 'status',
+  key: string,
+  localeKey: LocaleKey
+): string {
+  const source =
+    type === 'intent'
+      ? INTENT_LABELS
+      : type === 'capability'
+        ? CAPABILITY_LABELS
+        : type === 'domain'
+          ? TAXONOMY_DOMAIN_LABELS
+          : STATUS_LABELS;
+
+  const label = source[key];
+  if (label) {
+    return localize(label, localeKey);
+  }
+
+  return humanizeSlug(key);
+}
+
+function buildTaxonomyTags(taxonomy: SkillTaxonomyRecord, metaTags: string[]): SkillTag[] {
+  const tags: SkillTag[] = [];
+  const pushTag = (label: string, type: SkillTagType) => {
+    if (!tags.some((tag) => tag.label === label && tag.type === type)) {
+      tags.push({ label, type });
+    }
+  };
+
+  pushTag(taxonomy.primaryIntent.label, 'intent');
+  taxonomy.capabilities.forEach((facet) => pushTag(facet.label, 'capability'));
+  taxonomy.domains.forEach((facet) => pushTag(facet.label, 'domain'));
+  pushTag(taxonomy.status.label, 'status');
+  pushTag(taxonomy.source.label, 'source');
+  [...taxonomy.keywords, ...metaTags].slice(0, 4).forEach((label) => pushTag(label, 'meta'));
+
+  return tags;
+}
+
+function parseSkillCatalogV2(payload: unknown, localeKey: LocaleKey, text: Record<string, string>): Map<string, SkillTaxonomyRecord> {
+  const catalog = payload as SkillCatalogV2File;
+  const records = Array.isArray(catalog?.skills) ? catalog.skills : [];
+  const result = new Map<string, SkillTaxonomyRecord>();
+
+  for (const record of records) {
+    const taxonomy: SkillTaxonomyRecord = {
+      primaryIntent: {
+        key: record.primaryIntent,
+        label: localizeTaxonomyValue('intent', record.primaryIntent, localeKey),
+      },
+      intents: (record.intents?.length ? record.intents : [record.primaryIntent]).map((value) => ({
+        key: value,
+        label: localizeTaxonomyValue('intent', value, localeKey),
+      })),
+      capabilities: (record.capabilities ?? []).map((value) => ({
+        key: value,
+        label: localizeTaxonomyValue('capability', value, localeKey),
+      })),
+      domains: (record.domains ?? []).map((value) => ({
+        key: value,
+        label: localizeTaxonomyValue('domain', value, localeKey),
+      })),
+      keywords: Array.isArray(record.keywords) ? record.keywords.map((value) => compactText(String(value))).filter(Boolean) : [],
+      source: {
+        key: record.source,
+        label: record.source === 'vibelab' ? text.sourcePlatformShort : text.sourceImportedShort,
+      },
+      status: {
+        key: record.status,
+        label: localizeTaxonomyValue('status', record.status, localeKey),
+      },
+      relatedSkillNames: Array.isArray(record.relatedSkills) ? record.relatedSkills : [],
+      owner: record.owner,
+      legacyCollectionLabel: record.legacy?.collection,
+      legacyGroupLabel: record.legacy?.topLevelGroup,
+    };
+
+    const legacyDirPath = compactText(record.legacy?.dirPath ?? '');
+    if (legacyDirPath) {
+      result.set(legacyDirPath, taxonomy);
+    }
+
+    result.set(record.name, taxonomy);
+  }
+
+  return result;
 }
 
 function countFiles(node: SkillNode): number {
@@ -753,9 +965,35 @@ function buildFacetOptions(
   return Array.from(counts.values()).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 
+function buildMultiFacetOptions(
+  items: SkillExplorerItem[],
+  pickFacets: (item: SkillExplorerItem) => Array<{ key: string; label: string }>
+): FacetOption[] {
+  const counts = new Map<string, FacetOption>();
+
+  for (const item of items) {
+    for (const facet of pickFacets(item)) {
+      const current = counts.get(facet.key);
+      if (current) {
+        current.count += 1;
+      } else {
+        counts.set(facet.key, { ...facet, count: 1 });
+      }
+    }
+  }
+
+  return Array.from(counts.values()).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+
 function tagStyleClass(type: SkillTagType, label?: string): string {
-  if (label && isSourcePlatformTag(label)) {
+  if (type === 'source' || (label && isSourcePlatformTag(label))) {
     return 'border-amber-300/80 bg-amber-50 text-amber-800 shadow-sm dark:border-amber-500/60 dark:bg-amber-900/30 dark:text-amber-200';
+  }
+  if (type === 'intent') {
+    return 'border-sky-300/60 bg-sky-50 text-sky-700 dark:border-sky-600/60 dark:bg-sky-950/40 dark:text-sky-200';
+  }
+  if (type === 'capability') {
+    return 'border-violet-300/60 bg-violet-50 text-violet-700 dark:border-violet-600/60 dark:bg-violet-950/40 dark:text-violet-200';
   }
   if (type === 'stage') {
     if (label && /^(Category:|类别:|카테고리:)/.test(label)) {
@@ -766,14 +1004,20 @@ function tagStyleClass(type: SkillTagType, label?: string): string {
   if (type === 'domain') {
     return 'border-emerald-300/60 bg-emerald-50 text-emerald-700 dark:border-emerald-600/60 dark:bg-emerald-950/40 dark:text-emerald-200';
   }
+  if (type === 'status') {
+    return 'border-rose-300/60 bg-rose-50 text-rose-700 dark:border-rose-600/60 dark:bg-rose-950/40 dark:text-rose-200';
+  }
   return 'border-slate-300/60 bg-slate-50 text-slate-700 dark:border-slate-600/60 dark:bg-slate-900/60 dark:text-slate-200';
 }
 
 function getTagPriority(tag: SkillTag): number {
   if (isSourcePlatformTag(tag.label)) return 0;
-  if (tag.type === 'stage') return 1;
-  if (tag.type === 'domain') return 2;
-  return 3;
+  if (tag.type === 'intent') return 1;
+  if (tag.type === 'capability') return 2;
+  if (tag.type === 'domain') return 3;
+  if (tag.type === 'status' || tag.type === 'source') return 4;
+  if (tag.type === 'stage') return 5;
+  return 6;
 }
 
 function sortSkillTags(tags: SkillTag[]): SkillTag[] {
@@ -793,9 +1037,10 @@ function scoreSkillMatch(skill: SkillExplorerItem, query: string): number {
   let score = 0;
   const name = skill.name.toLowerCase();
   const path = skill.dirPath.toLowerCase();
-  const collection = skill.collectionLabel.toLowerCase();
-  const group = skill.topLevelGroupLabel.toLowerCase();
+  const primaryIntent = skill.primaryIntentLabel.toLowerCase();
+  const capabilities = skill.capabilityLabels.join(' ').toLowerCase();
   const domain = skill.primaryDomainLabel.toLowerCase();
+  const status = skill.statusLabel.toLowerCase();
   const summary = skill.summary.toLowerCase();
 
   for (const term of terms) {
@@ -803,9 +1048,10 @@ function scoreSkillMatch(skill: SkillExplorerItem, query: string): number {
     if (name.startsWith(term)) score += 80;
     if (name.includes(term)) score += 55;
     if (path.includes(term)) score += 35;
-    if (collection.includes(term)) score += 28;
-    if (group.includes(term)) score += 22;
+    if (primaryIntent.includes(term)) score += 28;
+    if (capabilities.includes(term)) score += 24;
     if (domain.includes(term)) score += 18;
+    if (status.includes(term)) score += 12;
     if (summary.includes(term)) score += 12;
     if (skill.tags.some((tag) => tag.label.toLowerCase().includes(term))) score += 10;
   }
@@ -819,8 +1065,8 @@ function scoreSkillMatch(skill: SkillExplorerItem, query: string): number {
 
 function sortSkillsForBrowse(items: SkillExplorerItem[]): SkillExplorerItem[] {
   return [...items].sort((a, b) =>
-    a.collectionLabel.localeCompare(b.collectionLabel)
-    || a.topLevelGroupLabel.localeCompare(b.topLevelGroupLabel)
+    a.primaryIntentLabel.localeCompare(b.primaryIntentLabel)
+    || a.statusLabel.localeCompare(b.statusLabel)
     || a.name.localeCompare(b.name)
   );
 }
@@ -835,59 +1081,117 @@ function buildExplorerSkills(
   }
 ): SkillExplorerItem[] {
   const seeds: SkillExplorerSeed[] = skills.map((skill) => {
-    const sortedTags = sortSkillTags(skill.tags);
+    const fallbackTags = sortSkillTags(skill.tags);
     const topLevelGroup = getTopLevelGroup(skill.dirPath, options.standaloneLabel);
-    const primaryStageTag = sortedTags.find((tag) => tag.type === 'stage');
-    const primaryDomainTag = sortedTags.find((tag) => tag.type === 'domain');
+    const primaryStageTag = fallbackTags.find((tag) => tag.type === 'stage');
+    const primaryDomainTag = fallbackTags.find((tag) => tag.type === 'domain');
     const collectionLabel = stripFacetPrefix(primaryStageTag?.label ?? topLevelGroup.label);
     const primaryDomainLabel = stripFacetPrefix(primaryDomainTag?.label ?? options.defaultDomainLabel);
+    const taxonomy = skill.taxonomy;
+    const fallbackSourceKey = fallbackTags.some((tag) => isSourcePlatformTag(tag.label)) ? 'vibelab' : 'imported';
+    const fallbackDomainKey = primaryDomainTag ? `domain:${normalizeSkillKey(primaryDomainLabel)}` : 'domain:general';
+    const fallbackCapabilities = topLevelGroup.key === 'standalone'
+      ? []
+      : [{ key: `legacy:${topLevelGroup.key}`, label: topLevelGroup.label }];
+    const intentLabel = taxonomy?.primaryIntent.label ?? collectionLabel;
+    const sourceLabel = taxonomy?.source.label ?? (fallbackSourceKey === 'vibelab' ? options.sourcePlatformShort : options.sourceImportedShort);
+    const statusKey = taxonomy?.status.key ?? (fallbackSourceKey === 'vibelab' ? 'verified' : 'candidate');
+    const statusLabel = taxonomy?.status.label ?? humanizeSlug(statusKey);
+    const domains = taxonomy?.domains ?? [{ key: fallbackDomainKey, label: primaryDomainLabel }];
+    const capabilities = taxonomy?.capabilities ?? fallbackCapabilities;
+    const tags = taxonomy
+      ? sortSkillTags(buildTaxonomyTags(taxonomy, fallbackTags.filter((tag) => tag.type === 'meta').map((tag) => tag.label)))
+      : fallbackTags;
 
     return {
       ...skill,
-      tags: sortedTags,
-      topLevelGroupKey: topLevelGroup.key,
-      topLevelGroupLabel: topLevelGroup.label,
-      collectionKey: primaryStageTag ? `stage:${normalizeSkillKey(collectionLabel)}` : `group:${topLevelGroup.key}`,
-      collectionLabel,
-      primaryDomainKey: primaryDomainTag ? `domain:${normalizeSkillKey(primaryDomainLabel)}` : 'domain:general',
-      primaryDomainLabel,
-      isPlatformNative: sortedTags.some((tag) => isSourcePlatformTag(tag.label)),
-      isStandalone: topLevelGroup.key === 'standalone',
+      tags,
+      primaryIntentKey: taxonomy?.primaryIntent.key ?? `legacy:${normalizeSkillKey(collectionLabel)}`,
+      primaryIntentLabel: intentLabel,
+      intentLabels: (taxonomy?.intents ?? [{ key: `legacy:${normalizeSkillKey(collectionLabel)}`, label: collectionLabel }]).map((facet) => facet.label),
+      capabilityKeys: capabilities.map((facet) => facet.key),
+      capabilityLabels: capabilities.map((facet) => facet.label),
+      domainKeys: domains.map((facet) => facet.key),
+      domainLabels: domains.map((facet) => facet.label),
+      keywordLabels: taxonomy?.keywords ?? fallbackTags.filter((tag) => tag.type === 'meta').map((tag) => tag.label),
+      primaryDomainKey: domains[0]?.key ?? fallbackDomainKey,
+      primaryDomainLabel: domains[0]?.label ?? primaryDomainLabel,
+      sourceKey: taxonomy?.source.key ?? fallbackSourceKey,
+      sourceLabel,
+      statusKey,
+      statusLabel,
+      owner: taxonomy?.owner,
+      legacyCollectionLabel: taxonomy?.legacyCollectionLabel ?? collectionLabel,
+      legacyGroupLabel: taxonomy?.legacyGroupLabel ?? topLevelGroup.label,
+      relatedSkillNames: taxonomy?.relatedSkillNames ?? [],
       searchText: compactText([
         skill.name,
         skill.dirPath,
         skill.summary,
-        collectionLabel,
-        topLevelGroup.label,
-        primaryDomainLabel,
-        ...sortedTags.map((tag) => tag.label),
+        intentLabel,
+        capabilities.map((facet) => facet.label).join(' '),
+        domains.map((facet) => facet.label).join(' '),
+        sourceLabel,
+        statusLabel,
+        ...tags.map((tag) => tag.label),
       ].join(' ')).toLowerCase(),
     };
   });
 
+  const seedByName = new Map(seeds.map((skill) => [skill.name, skill]));
+
   return seeds.map((skill) => {
-    const relatedSkills = seeds
+    const inferReason = (other: SkillExplorerSeed): string => {
+      const sharedCapability = skill.capabilityLabels.find((label) => other.capabilityLabels.includes(label));
+      if (sharedCapability) return sharedCapability;
+      const sharedDomain = skill.domainLabels.find((label) => other.domainLabels.includes(label));
+      if (sharedDomain) return sharedDomain;
+      const sharedIntent = skill.intentLabels.find((label) => other.intentLabels.includes(label));
+      if (sharedIntent) return sharedIntent;
+      if (skill.sourceKey === other.sourceKey) return skill.sourceLabel;
+      return other.primaryIntentLabel;
+    };
+
+    const explicitRelated = skill.relatedSkillNames
+      .map((name, index) => {
+        const other = seedByName.get(name);
+        if (!other || other.dirPath === skill.dirPath) {
+          return null;
+        }
+
+        return {
+          dirPath: other.dirPath,
+          name: other.name,
+          reason: inferReason(other),
+          score: 100 - index,
+        };
+      })
+      .filter((relation): relation is SkillRelation => relation !== null);
+
+    const heuristicRelated = seeds
       .filter((other) => other.dirPath !== skill.dirPath)
       .map((other) => {
         let score = 0;
         let reason = '';
 
-        if (skill.collectionKey === other.collectionKey) {
+        if (skill.primaryIntentKey === other.primaryIntentKey) {
           score += 6;
-          reason = skill.collectionLabel;
+          reason = skill.primaryIntentLabel;
         }
 
-        if (skill.topLevelGroupKey === other.topLevelGroupKey && skill.topLevelGroupKey !== 'standalone') {
+        const sharedCapabilities = skill.capabilityLabels.filter((label) => other.capabilityLabels.includes(label));
+        if (sharedCapabilities.length > 0) {
           score += 4;
           if (!reason) {
-            reason = skill.topLevelGroupLabel;
+            reason = sharedCapabilities[0];
           }
         }
 
-        if (skill.primaryDomainKey === other.primaryDomainKey && skill.primaryDomainKey !== 'domain:general') {
+        const sharedDomains = skill.domainLabels.filter((label) => other.domainLabels.includes(label));
+        if (sharedDomains.length > 0) {
           score += 3;
           if (!reason) {
-            reason = skill.primaryDomainLabel;
+            reason = sharedDomains[0];
           }
         }
 
@@ -901,9 +1205,9 @@ function buildExplorerSkills(
           }
         }
 
-        if (score === 0 && skill.isPlatformNative === other.isPlatformNative) {
+        if (score === 0 && skill.sourceKey === other.sourceKey) {
           score = 1;
-          reason = skill.isPlatformNative ? options.sourcePlatformShort : options.sourceImportedShort;
+          reason = skill.sourceLabel;
         }
 
         if (score === 0) {
@@ -921,6 +1225,10 @@ function buildExplorerSkills(
       .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
       .slice(0, 6);
 
+    const relatedSkills = explicitRelated.length > 0
+      ? explicitRelated
+      : heuristicRelated;
+
     return {
       ...skill,
       relatedSkills,
@@ -936,6 +1244,51 @@ function facetButtonClass(active: boolean): string {
   }`;
 }
 
+function DetailChipSection({
+  title,
+  values,
+  type = 'meta',
+}: {
+  title: string;
+  values: string[];
+  type?: SkillTagType;
+}) {
+  if (values.length === 0) {
+    return null;
+  }
+
+  return (
+    <div>
+      <h4 className="text-sm font-semibold text-foreground">{title}</h4>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {values.map((value) => (
+          <span
+            key={`${title}-${value}`}
+            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium ${tagStyleClass(type, value)}`}
+          >
+            {value}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function buildSkillCardTagSummary(skill: SkillExplorerItem): { tags: Array<{ label: string; type: SkillTagType }>; hiddenCount: number } {
+  const tags: Array<{ label: string; type: SkillTagType }> = [
+    { label: skill.primaryIntentLabel, type: 'intent' },
+    ...skill.capabilityLabels.slice(0, 2).map((label) => ({ label, type: 'capability' as SkillTagType })),
+    ...skill.domainLabels.slice(0, 1).map((label) => ({ label, type: 'domain' as SkillTagType })),
+    { label: skill.statusLabel, type: 'status' },
+  ];
+
+  const hiddenCount = Math.max(skill.intentLabels.length - 1, 0)
+    + Math.max(skill.capabilityLabels.length - 2, 0)
+    + Math.max(skill.domainLabels.length - 1, 0);
+
+  return { tags, hiddenCount };
+}
+
 export default function SkillsDashboard() {
   const { i18n } = useTranslation();
   const localeKey = useMemo(() => resolveLocaleKey(i18n.language || 'en'), [i18n.language]);
@@ -946,10 +1299,11 @@ export default function SkillsDashboard() {
   const [skills, setSkills] = useState<SkillSummary[]>([]);
   const [hasSkillRoots, setHasSkillRoots] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeCollection, setActiveCollection] = useState('all');
-  const [activeGroup, setActiveGroup] = useState('all');
+  const [activeIntent, setActiveIntent] = useState('all');
+  const [activeCapability, setActiveCapability] = useState('all');
   const [activeDomain, setActiveDomain] = useState('all');
-  const [activeSource, setActiveSource] = useState<'all' | 'native' | 'community'>('all');
+  const [activeSource, setActiveSource] = useState<'all' | 'vibelab' | 'imported'>('all');
+  const [activeStatus, setActiveStatus] = useState('all');
   const [focusedSkill, setFocusedSkill] = useState<SkillExplorerItem | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importPath, setImportPath] = useState('~/.claude/skills');
@@ -980,6 +1334,27 @@ export default function SkillsDashboard() {
         }
       } catch {
         tagMapping = EMPTY_TAG_MAPPING;
+      }
+
+      let taxonomyMap = new Map<string, SkillTaxonomyRecord>();
+      let catalogRecordMap = new Map<string, SkillCatalogV2Record>();
+      try {
+        const catalogResponse = await api.readGlobalSkillFile('skills-catalog-v2.json');
+        if (catalogResponse.ok) {
+          const catalogPayload = await catalogResponse.json();
+          const catalogContent = catalogPayload?.content ?? '';
+          const catalog = JSON.parse(catalogContent || '{}') as SkillCatalogV2File;
+          taxonomyMap = parseSkillCatalogV2(catalog, localeKey, text);
+          for (const record of catalog.skills ?? []) {
+            if (record.legacy?.dirPath) {
+              catalogRecordMap.set(record.legacy.dirPath, record);
+            }
+            catalogRecordMap.set(record.name, record);
+          }
+        }
+      } catch {
+        taxonomyMap = new Map<string, SkillTaxonomyRecord>();
+        catalogRecordMap = new Map<string, SkillCatalogV2Record>();
       }
 
       const treeResponse = await api.getGlobalSkills();
@@ -1018,6 +1393,9 @@ export default function SkillsDashboard() {
           let summary = '';
           let fullDescription = '';
           let tags: SkillTag[] = [];
+          let taxonomy: SkillTaxonomyRecord | null = null;
+
+          taxonomy = taxonomyMap.get(dirPath) ?? taxonomyMap.get(skillName) ?? null;
 
           if (hasSkillMd) {
             try {
@@ -1035,6 +1413,14 @@ export default function SkillsDashboard() {
           }
 
           if (!summary) {
+            const catalogRecord = catalogRecordMap.get(dirPath) ?? catalogRecordMap.get(skillName);
+            if (catalogRecord?.summary) {
+              summary = catalogRecord.summary;
+              fullDescription = catalogRecord.summary;
+            }
+          }
+
+          if (!summary) {
             const fileCount = countFiles(node);
             summary = hasSkillMd
               ? text.fallbackDesc
@@ -1045,13 +1431,20 @@ export default function SkillsDashboard() {
             fullDescription = summary;
           }
 
+          if (taxonomy) {
+            tags = buildTaxonomyTags(taxonomy, tags.filter((tag) => tag.type === 'meta').map((tag) => tag.label));
+          } else {
+            tags = inferTags(skillName, summary, tags, localeKey, tagMapping);
+          }
+
           return {
             name: skillName,
             dirPath,
             summary,
             fullDescription,
-            tags: inferTags(skillName, summary, tags, localeKey, tagMapping),
+            tags,
             hasSkillMd,
+            taxonomy,
           };
         })
       );
@@ -1066,7 +1459,7 @@ export default function SkillsDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [localeKey, text.fallbackDesc, text.fallbackNoSkillMd]);
+  }, [localeKey, text, text.fallbackDesc, text.fallbackNoSkillMd]);
 
   const handleScanLocal = useCallback(async () => {
     setScanLoading(true);
@@ -1235,8 +1628,10 @@ export default function SkillsDashboard() {
   }, [loadSkills]);
 
   useEffect(() => {
-    setActiveCollection('all');
+    setActiveIntent('all');
+    setActiveCapability('all');
     setActiveDomain('all');
+    setActiveStatus('all');
   }, [localeKey]);
 
   const explorerSkills = useMemo(
@@ -1255,15 +1650,19 @@ export default function SkillsDashboard() {
   );
 
   const allCollectionOptions = useMemo(
-    () => buildFacetOptions(explorerSkills, (skill) => ({ key: skill.collectionKey, label: skill.collectionLabel })),
+    () => buildFacetOptions(explorerSkills, (skill) => ({ key: skill.primaryIntentKey, label: skill.primaryIntentLabel })),
     [explorerSkills]
   );
   const allGroupOptions = useMemo(
-    () => buildFacetOptions(explorerSkills, (skill) => ({ key: skill.topLevelGroupKey, label: skill.topLevelGroupLabel })),
+    () => buildMultiFacetOptions(explorerSkills, (skill) => skill.capabilityKeys.map((key, index) => ({ key, label: skill.capabilityLabels[index] }))),
     [explorerSkills]
   );
   const allDomainOptions = useMemo(
-    () => buildFacetOptions(explorerSkills, (skill) => ({ key: skill.primaryDomainKey, label: skill.primaryDomainLabel })),
+    () => buildMultiFacetOptions(explorerSkills, (skill) => skill.domainKeys.map((key, index) => ({ key, label: skill.domainLabels[index] }))),
+    [explorerSkills]
+  );
+  const allStatusOptions = useMemo(
+    () => buildFacetOptions(explorerSkills, (skill) => ({ key: skill.statusKey, label: skill.statusLabel })),
     [explorerSkills]
   );
 
@@ -1278,6 +1677,10 @@ export default function SkillsDashboard() {
   const domainLookup = useMemo(
     () => new Map(allDomainOptions.map((option) => [option.key, option.label])),
     [allDomainOptions]
+  );
+  const statusLookup = useMemo(
+    () => new Map(allStatusOptions.map((option) => [option.key, option.label])),
+    [allStatusOptions]
   );
 
   const searchFilteredSkills = useMemo(() => {
@@ -1294,72 +1697,82 @@ export default function SkillsDashboard() {
   }, [explorerSkills, searchQuery]);
 
   const collectionOptions = useMemo(
-    () => buildFacetOptions(searchFilteredSkills, (skill) => ({ key: skill.collectionKey, label: skill.collectionLabel })),
+    () => buildFacetOptions(searchFilteredSkills, (skill) => ({ key: skill.primaryIntentKey, label: skill.primaryIntentLabel })),
     [searchFilteredSkills]
   );
   const groupOptions = useMemo(
-    () => buildFacetOptions(searchFilteredSkills, (skill) => ({ key: skill.topLevelGroupKey, label: skill.topLevelGroupLabel })),
+    () => buildMultiFacetOptions(searchFilteredSkills, (skill) => skill.capabilityKeys.map((key, index) => ({ key, label: skill.capabilityLabels[index] }))),
     [searchFilteredSkills]
   );
   const domainOptions = useMemo(
-    () => buildFacetOptions(searchFilteredSkills, (skill) => ({ key: skill.primaryDomainKey, label: skill.primaryDomainLabel })),
+    () => buildMultiFacetOptions(searchFilteredSkills, (skill) => skill.domainKeys.map((key, index) => ({ key, label: skill.domainLabels[index] }))),
+    [searchFilteredSkills]
+  );
+  const statusOptions = useMemo(
+    () => buildFacetOptions(searchFilteredSkills, (skill) => ({ key: skill.statusKey, label: skill.statusLabel })),
     [searchFilteredSkills]
   );
 
   const filteredSkills = useMemo(() => {
     return searchFilteredSkills.filter((skill) => {
-      if (activeSource === 'native' && !skill.isPlatformNative) return false;
-      if (activeSource === 'community' && skill.isPlatformNative) return false;
-      if (activeCollection !== 'all' && skill.collectionKey !== activeCollection) return false;
-      if (activeGroup !== 'all' && skill.topLevelGroupKey !== activeGroup) return false;
-      if (activeDomain !== 'all' && skill.primaryDomainKey !== activeDomain) return false;
+      if (activeSource !== 'all' && skill.sourceKey !== activeSource) return false;
+      if (activeIntent !== 'all' && skill.primaryIntentKey !== activeIntent) return false;
+      if (activeCapability !== 'all' && !skill.capabilityKeys.includes(activeCapability)) return false;
+      if (activeDomain !== 'all' && !skill.domainKeys.includes(activeDomain)) return false;
+      if (activeStatus !== 'all' && skill.statusKey !== activeStatus) return false;
       return true;
     });
-  }, [activeCollection, activeDomain, activeGroup, activeSource, searchFilteredSkills]);
+  }, [activeCapability, activeDomain, activeIntent, activeSource, activeStatus, searchFilteredSkills]);
 
-  const nativeCount = useMemo(
-    () => explorerSkills.filter((skill) => skill.isPlatformNative).length,
+  const verifiedCount = useMemo(
+    () => explorerSkills.filter((skill) => skill.statusKey === 'verified').length,
     [explorerSkills]
   );
-  const importedCount = explorerSkills.length - nativeCount;
 
   const hasActiveFilters = Boolean(searchQuery.trim())
     || activeSource !== 'all'
-    || activeCollection !== 'all'
-    || activeGroup !== 'all'
-    || activeDomain !== 'all';
+    || activeIntent !== 'all'
+    || activeCapability !== 'all'
+    || activeDomain !== 'all'
+    || activeStatus !== 'all';
 
   const activeFilterLabels = useMemo(() => {
     const labels: string[] = [];
 
-    if (activeSource === 'native') {
+    if (activeSource === 'vibelab') {
       labels.push(`${text.sourceField}: ${text.sourcePlatformShort}`);
     }
-    if (activeSource === 'community') {
+    if (activeSource === 'imported') {
       labels.push(`${text.sourceField}: ${text.sourceImportedShort}`);
     }
-    if (activeCollection !== 'all') {
-      labels.push(`${text.collectionField}: ${collectionLookup.get(activeCollection) ?? activeCollection}`);
+    if (activeIntent !== 'all') {
+      labels.push(`${text.primaryIntentField}: ${collectionLookup.get(activeIntent) ?? activeIntent}`);
     }
-    if (activeGroup !== 'all') {
-      labels.push(`${text.folderField}: ${groupLookup.get(activeGroup) ?? activeGroup}`);
+    if (activeCapability !== 'all') {
+      labels.push(`${text.capabilitiesField}: ${groupLookup.get(activeCapability) ?? activeCapability}`);
     }
     if (activeDomain !== 'all') {
       labels.push(`${text.domainField}: ${domainLookup.get(activeDomain) ?? activeDomain}`);
     }
+    if (activeStatus !== 'all') {
+      labels.push(`${text.statusField}: ${statusLookup.get(activeStatus) ?? activeStatus}`);
+    }
 
     return labels;
   }, [
-    activeCollection,
+    activeCapability,
     activeDomain,
-    activeGroup,
+    activeIntent,
     activeSource,
-    collectionLookup,
+    activeStatus,
     domainLookup,
     groupLookup,
-    text.collectionField,
+    collectionLookup,
+    statusLookup,
+    text.capabilitiesField,
     text.domainField,
-    text.folderField,
+    text.primaryIntentField,
+    text.statusField,
     text.sourceField,
     text.sourceImportedShort,
     text.sourcePlatformShort,
@@ -1408,9 +1821,10 @@ export default function SkillsDashboard() {
   const clearAllFilters = useCallback(() => {
     setSearchQuery('');
     setActiveSource('all');
-    setActiveCollection('all');
-    setActiveGroup('all');
+    setActiveIntent('all');
+    setActiveCapability('all');
     setActiveDomain('all');
+    setActiveStatus('all');
   }, []);
 
   if (loading) {
@@ -1447,19 +1861,19 @@ export default function SkillsDashboard() {
                 <div className="rounded-2xl border border-white/80 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-white/10 dark:bg-slate-950/50">
                   <p className="text-xl font-semibold text-foreground">{allCollectionOptions.length}</p>
                   <p className="mt-1 text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                    {text.summaryCollections.replace('{{count}}', String(allCollectionOptions.length))}
+                    {text.summaryIntents.replace('{{count}}', String(allCollectionOptions.length))}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-white/80 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-white/10 dark:bg-slate-950/50">
                   <p className="text-xl font-semibold text-foreground">{allGroupOptions.length}</p>
                   <p className="mt-1 text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                    {text.summaryFolders.replace('{{count}}', String(allGroupOptions.length))}
+                    {text.summaryCapabilities.replace('{{count}}', String(allGroupOptions.length))}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-white/80 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-white/10 dark:bg-slate-950/50">
-                  <p className="text-xl font-semibold text-foreground">{nativeCount}</p>
+                  <p className="text-xl font-semibold text-foreground">{verifiedCount}</p>
                   <p className="mt-1 text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                    {text.summaryWorkflows.replace('{{count}}', String(nativeCount))}
+                    {text.summaryVerified.replace('{{count}}', String(verifiedCount))}
                   </p>
                 </div>
               </div>
@@ -1550,36 +1964,52 @@ export default function SkillsDashboard() {
                       key: 'all',
                       label: text.allSkills,
                       count: searchFilteredSkills.length,
-                      active: activeSource === 'all' && activeGroup === 'all' && activeCollection === 'all' && activeDomain === 'all',
+                      active: activeSource === 'all' && activeIntent === 'all' && activeCapability === 'all' && activeDomain === 'all' && activeStatus === 'all',
                       onClick: () => {
                         setActiveSource('all');
-                        setActiveCollection('all');
-                        setActiveGroup('all');
+                        setActiveIntent('all');
+                        setActiveCapability('all');
                         setActiveDomain('all');
+                        setActiveStatus('all');
+                      },
+                    },
+                    {
+                      key: 'verified',
+                      label: text.verifiedSkills,
+                      count: searchFilteredSkills.filter((skill) => skill.statusKey === 'verified').length,
+                      active: activeStatus === 'verified' && activeSource === 'all' && activeIntent === 'all' && activeCapability === 'all' && activeDomain === 'all',
+                      onClick: () => {
+                        setActiveSource('all');
+                        setActiveIntent('all');
+                        setActiveCapability('all');
+                        setActiveDomain('all');
+                        setActiveStatus('verified');
                       },
                     },
                     {
                       key: 'community',
                       label: text.communitySkills,
-                      count: searchFilteredSkills.filter((skill) => !skill.isPlatformNative).length,
-                      active: activeSource === 'community' && activeCollection === 'all' && activeGroup === 'all' && activeDomain === 'all',
+                      count: searchFilteredSkills.filter((skill) => skill.sourceKey === 'imported').length,
+                      active: activeSource === 'imported' && activeIntent === 'all' && activeCapability === 'all' && activeDomain === 'all' && activeStatus === 'all',
                       onClick: () => {
-                        setActiveSource('community');
-                        setActiveCollection('all');
-                        setActiveGroup('all');
+                        setActiveSource('imported');
+                        setActiveIntent('all');
+                        setActiveCapability('all');
                         setActiveDomain('all');
+                        setActiveStatus('all');
                       },
                     },
                     {
-                      key: 'standalone',
-                      label: text.standaloneSkills,
-                      count: searchFilteredSkills.filter((skill) => skill.isStandalone).length,
-                      active: activeGroup === 'standalone' && activeSource === 'all' && activeCollection === 'all' && activeDomain === 'all',
+                      key: 'native',
+                      label: text.nativeSkills,
+                      count: searchFilteredSkills.filter((skill) => skill.sourceKey === 'vibelab').length,
+                      active: activeSource === 'vibelab' && activeIntent === 'all' && activeCapability === 'all' && activeDomain === 'all' && activeStatus === 'all',
                       onClick: () => {
-                        setActiveSource('all');
-                        setActiveCollection('all');
-                        setActiveGroup('standalone');
+                        setActiveSource('vibelab');
+                        setActiveIntent('all');
+                        setActiveCapability('all');
                         setActiveDomain('all');
+                        setActiveStatus('all');
                       },
                     },
                   ].map((item) => (
@@ -1599,23 +2029,23 @@ export default function SkillsDashboard() {
               <div className="rounded-2xl border border-border/80 bg-card/95 p-4 shadow-sm">
                 <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
                   <Sparkles className="h-4 w-4 text-amber-600" />
-                  {text.collections}
+                  {text.intents}
                 </div>
                 <div className="max-h-[320px] space-y-2 overflow-auto pr-1">
                   <button
                     type="button"
-                    onClick={() => setActiveCollection('all')}
-                    className={facetButtonClass(activeCollection === 'all')}
+                    onClick={() => setActiveIntent('all')}
+                    className={facetButtonClass(activeIntent === 'all')}
                   >
-                    <span>{text.allCollections}</span>
+                    <span>{text.allIntents}</span>
                     <span className="text-xs text-muted-foreground">{searchFilteredSkills.length}</span>
                   </button>
                   {collectionOptions.map((option) => (
                     <button
                       key={option.key}
                       type="button"
-                      onClick={() => setActiveCollection(option.key)}
-                      className={facetButtonClass(activeCollection === option.key)}
+                      onClick={() => setActiveIntent(option.key)}
+                      className={facetButtonClass(activeIntent === option.key)}
                     >
                       <span className="min-w-0 truncate">{option.label}</span>
                       <span className="text-xs text-muted-foreground">{option.count}</span>
@@ -1627,23 +2057,23 @@ export default function SkillsDashboard() {
               <div className="rounded-2xl border border-border/80 bg-card/95 p-4 shadow-sm">
                 <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
                   <FolderTree className="h-4 w-4 text-emerald-600" />
-                  {text.folders}
+                  {text.capabilities}
                 </div>
                 <div className="max-h-[320px] space-y-2 overflow-auto pr-1">
                   <button
                     type="button"
-                    onClick={() => setActiveGroup('all')}
-                    className={facetButtonClass(activeGroup === 'all')}
+                    onClick={() => setActiveCapability('all')}
+                    className={facetButtonClass(activeCapability === 'all')}
                   >
-                    <span>{text.allFolders}</span>
+                    <span>{text.allCapabilities}</span>
                     <span className="text-xs text-muted-foreground">{searchFilteredSkills.length}</span>
                   </button>
                   {groupOptions.map((option) => (
                     <button
                       key={option.key}
                       type="button"
-                      onClick={() => setActiveGroup(option.key)}
-                      className={facetButtonClass(activeGroup === option.key)}
+                      onClick={() => setActiveCapability(option.key)}
+                      className={facetButtonClass(activeCapability === option.key)}
                     >
                       <span className="min-w-0 truncate">{option.label}</span>
                       <span className="text-xs text-muted-foreground">{option.count}</span>
@@ -1673,6 +2103,36 @@ export default function SkillsDashboard() {
                         type="button"
                         onClick={() => setActiveDomain(option.key)}
                         className={facetButtonClass(activeDomain === option.key)}
+                      >
+                        <span className="min-w-0 truncate">{option.label}</span>
+                        <span className="text-xs text-muted-foreground">{option.count}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {statusOptions.length > 1 && (
+                <div className="rounded-2xl border border-border/80 bg-card/95 p-4 shadow-sm">
+                  <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <Check className="h-4 w-4 text-rose-600" />
+                    {text.statuses}
+                  </div>
+                  <div className="max-h-[220px] space-y-2 overflow-auto pr-1">
+                    <button
+                      type="button"
+                      onClick={() => setActiveStatus('all')}
+                      className={facetButtonClass(activeStatus === 'all')}
+                    >
+                      <span>{text.allStatuses}</span>
+                      <span className="text-xs text-muted-foreground">{searchFilteredSkills.length}</span>
+                    </button>
+                    {statusOptions.map((option) => (
+                      <button
+                        key={option.key}
+                        type="button"
+                        onClick={() => setActiveStatus(option.key)}
+                        className={facetButtonClass(activeStatus === option.key)}
                       >
                         <span className="min-w-0 truncate">{option.label}</span>
                         <span className="text-xs text-muted-foreground">{option.count}</span>
@@ -1720,6 +2180,7 @@ export default function SkillsDashboard() {
                   <div className="divide-y divide-border/60">
                     {filteredSkills.map((skill) => {
                       const isFocused = focusedSkill?.dirPath === skill.dirPath;
+                      const { tags: cardTags, hiddenCount } = buildSkillCardTagSummary(skill);
                       return (
                         <button
                           key={skill.dirPath}
@@ -1734,12 +2195,19 @@ export default function SkillsDashboard() {
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
                               <h4 className="break-all text-sm font-semibold text-foreground">{skill.name}</h4>
-                              <span className="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[11px] font-medium text-cyan-700 dark:border-cyan-900 dark:bg-cyan-950/50 dark:text-cyan-200">
-                                {skill.collectionLabel}
-                              </span>
-                              <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200">
-                                {skill.topLevelGroupLabel}
-                              </span>
+                              {cardTags.map((tag) => (
+                                <span
+                                  key={`${skill.dirPath}-${tag.type}-${tag.label}`}
+                                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${tagStyleClass(tag.type, tag.label)}`}
+                                >
+                                  {tag.label}
+                                </span>
+                              ))}
+                              {hiddenCount > 0 && (
+                                <span className="inline-flex items-center rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                                  +{hiddenCount}
+                                </span>
+                              )}
                             </div>
                             <p className="mt-1 text-xs text-muted-foreground">{`skills/${skill.dirPath}`}</p>
                             <p
@@ -1753,16 +2221,6 @@ export default function SkillsDashboard() {
                             >
                               {skill.summary}
                             </p>
-                            <div className="mt-3 flex flex-wrap gap-1.5">
-                              {skill.tags.slice(0, 5).map((tag) => (
-                                <span
-                                  key={`${skill.dirPath}-${tag.label}`}
-                                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] ${tagStyleClass(tag.type, tag.label)}`}
-                                >
-                                  {tag.label}
-                                </span>
-                              ))}
-                            </div>
                           </div>
                           <ChevronRight className={`mt-1 h-4 w-4 shrink-0 ${isFocused ? 'text-sky-600 dark:text-sky-300' : 'text-muted-foreground'}`} />
                         </button>
@@ -1787,6 +2245,17 @@ export default function SkillsDashboard() {
                           <p className="text-xs font-medium uppercase tracking-[0.24em] text-sky-600 dark:text-sky-300">{text.detailTitle}</p>
                           <h3 className="mt-2 break-all text-xl font-semibold text-foreground">{focusedSkill.name}</h3>
                           <p className="mt-2 text-sm leading-6 text-muted-foreground">{focusedSkill.summary}</p>
+                          <div className="mt-3 flex flex-wrap gap-1.5">
+                            <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium ${tagStyleClass('intent', focusedSkill.primaryIntentLabel)}`}>
+                              {focusedSkill.primaryIntentLabel}
+                            </span>
+                            <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium ${tagStyleClass('status', focusedSkill.statusLabel)}`}>
+                              {focusedSkill.statusLabel}
+                            </span>
+                            <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium ${tagStyleClass('source', focusedSkill.sourceLabel)}`}>
+                              {focusedSkill.sourceLabel}
+                            </span>
+                          </div>
                         </div>
                         <div className="flex flex-wrap justify-end gap-2">
                           {!isEditing && (
@@ -1845,23 +2314,35 @@ export default function SkillsDashboard() {
 
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
-                          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{text.collectionField}</p>
-                          <p className="mt-1 text-sm font-medium text-foreground">{focusedSkill.collectionLabel}</p>
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{text.primaryIntentField}</p>
+                          <p className="mt-1 text-sm font-medium text-foreground">{focusedSkill.primaryIntentLabel}</p>
                         </div>
                         <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
-                          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{text.folderField}</p>
-                          <p className="mt-1 text-sm font-medium text-foreground">{focusedSkill.topLevelGroupLabel}</p>
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{text.intentsField}</p>
+                          <p className="mt-1 text-sm font-medium text-foreground">{focusedSkill.intentLabels.join(', ')}</p>
+                        </div>
+                        <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{text.statusField}</p>
+                          <p className="mt-1 text-sm font-medium text-foreground">{focusedSkill.statusLabel}</p>
                         </div>
                         <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{text.domainField}</p>
-                          <p className="mt-1 text-sm font-medium text-foreground">{focusedSkill.primaryDomainLabel}</p>
+                          <p className="mt-1 text-sm font-medium text-foreground">{focusedSkill.domainLabels.join(', ')}</p>
                         </div>
                         <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{text.sourceField}</p>
-                          <p className="mt-1 text-sm font-medium text-foreground">
-                            {focusedSkill.isPlatformNative ? text.sourcePlatformShort : text.sourceImportedShort}
-                          </p>
+                          <p className="mt-1 text-sm font-medium text-foreground">{focusedSkill.sourceLabel}</p>
                         </div>
+                        <div className="rounded-xl border border-border/70 bg-muted/30 p-3 sm:col-span-2">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{text.capabilitiesField}</p>
+                          <p className="mt-1 text-sm font-medium text-foreground">{focusedSkill.capabilityLabels.join(', ') || '—'}</p>
+                        </div>
+                        {focusedSkill.owner && (
+                          <div className="rounded-xl border border-border/70 bg-muted/30 p-3 sm:col-span-2">
+                            <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{text.ownerField}</p>
+                            <p className="mt-1 text-sm font-medium text-foreground">{focusedSkill.owner}</p>
+                          </div>
+                        )}
                       </div>
 
                       <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
@@ -1869,22 +2350,18 @@ export default function SkillsDashboard() {
                         <p className="mt-1 break-all text-sm font-medium text-foreground">{`skills/${focusedSkill.dirPath}`}</p>
                       </div>
 
+                      <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{text.legacyField}</p>
+                        <p className="mt-1 text-sm font-medium text-foreground">
+                          {`${focusedSkill.legacyCollectionLabel} / ${focusedSkill.legacyGroupLabel}`}
+                        </p>
+                      </div>
+
                       {!focusedSkill.hasSkillMd && !isEditing && (
                         <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
                           {text.noSkillFile}
                         </div>
                       )}
-
-                      <div className="flex flex-wrap gap-1.5">
-                        {focusedSkill.tags.map((tag) => (
-                          <span
-                            key={`${focusedSkill.dirPath}-detail-${tag.label}`}
-                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] ${tagStyleClass(tag.type, tag.label)}`}
-                          >
-                            {tag.label}
-                          </span>
-                        ))}
-                      </div>
 
                       {isEditing ? (
                         <textarea
@@ -1895,6 +2372,44 @@ export default function SkillsDashboard() {
                         />
                       ) : (
                         <>
+                          <div className="grid gap-5">
+                            <DetailChipSection
+                              title={text.intentsField}
+                              values={focusedSkill.intentLabels}
+                              type="intent"
+                            />
+                            <DetailChipSection
+                              title={text.capabilitiesField}
+                              values={focusedSkill.capabilityLabels}
+                              type="capability"
+                            />
+                            <DetailChipSection
+                              title={text.domainField}
+                              values={focusedSkill.domainLabels}
+                              type="domain"
+                            />
+                            <DetailChipSection
+                              title={text.keywordsField}
+                              values={focusedSkill.keywordLabels}
+                              type="meta"
+                            />
+                            {!focusedSkill.taxonomy && focusedSkill.tags.length > 0 && (
+                              <div>
+                                <h4 className="text-sm font-semibold text-foreground">{text.rawTagsField}</h4>
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  {focusedSkill.tags.map((tag) => (
+                                    <span
+                                      key={`${focusedSkill.dirPath}-detail-${tag.label}`}
+                                      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium ${tagStyleClass(tag.type, tag.label)}`}
+                                    >
+                                      {tag.label}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
                           <div>
                             <h4 className="text-sm font-semibold text-foreground">{text.overview}</h4>
                             <div className="mt-2 max-h-[38vh] overflow-auto rounded-xl border border-border/70 bg-muted/30 p-4">
