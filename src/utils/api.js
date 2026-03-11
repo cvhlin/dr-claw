@@ -83,6 +83,11 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ displayName }),
     }),
+  renameSession: (projectName, sessionId, summary, provider = 'claude') =>
+    authenticatedFetch(`/api/projects/${projectName}/sessions/${sessionId}/rename`, {
+      method: 'PUT',
+      body: JSON.stringify({ summary, provider }),
+    }),
   deleteSession: (projectName, sessionId, provider = 'claude') =>
     authenticatedFetch(`/api/projects/${projectName}/sessions/${sessionId}?provider=${provider}`, {
       method: 'DELETE',
