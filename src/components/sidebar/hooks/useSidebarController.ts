@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type React from 'react';
 import type { TFunction } from 'i18next';
 import { api } from '../../../utils/api';
-import type { Project, ProjectSession } from '../../../types/app';
+import type { Project, ProjectSession, SessionProvider } from '../../../types/app';
 import type {
   AdditionalSessionsByProject,
   DeleteProjectConfirmation,

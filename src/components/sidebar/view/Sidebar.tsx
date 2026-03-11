@@ -214,12 +214,12 @@ function Sidebar({
       {showWizard && (
         <ProjectCreationWizard
           onClose={() => setShowWizard(false)}
-          onProjectCreated={(project) => {
+          onProjectCreated={(project: Project) => {
             setShowWizard(false);
             if (window.handleProjectCreatedWithIntake) {
-              window.handleProjectCreatedWithIntake(project as Project);
+              window.handleProjectCreatedWithIntake(project);
             } else {
-              handleProjectSelect(project as Project);
+              handleProjectSelect(project);
             }
           }}
         />
