@@ -16,13 +16,13 @@
     "NOTICE",
     "LICENSE"
   ],
-  "homepage": "https://github.com/OpenLAIR/VibeLab",
+  "homepage": "https://github.com/OpenLAIR/dr-claw",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/OpenLAIR/VibeLab.git"
+    "url": "git+https://github.com/OpenLAIR/dr-claw.git"
   },
   "bugs": {
-    "url": "https://github.com/OpenLAIR/VibeLab/issues"
+    "url": "https://github.com/OpenLAIR/dr-claw/issues"
   },
   "scripts": {
     "dev": "concurrently --kill-others \"npm run server\" \"npm run client\"",

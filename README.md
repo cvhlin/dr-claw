@@ -5,10 +5,10 @@
 </div>
 
 <p align="center">
-<a href="https://github.com/OpenLAIR/VibeLab">
-<img src="https://img.shields.io/github/stars/OpenLAIR/VibeLab?style=for-the-badge&logo=github" alt="GitHub Stars" />
+<a href="https://github.com/OpenLAIR/dr-claw">
+<img src="https://img.shields.io/github/stars/OpenLAIR/dr-claw?style=for-the-badge&logo=github" alt="GitHub Stars" />
 </a>
-<a href="https://github.com/OpenLAIR/VibeLab/blob/main/LICENSE">
+<a href="https://github.com/OpenLAIR/dr-claw/blob/main/LICENSE">
 <img src="https://img.shields.io/badge/License-GPL--3.0-blue?style=for-the-badge" alt="License" />
 </a>
 <a href="https://join.slack.com/t/vibe-lab-group/shared_invite/zt-3r4bkcx5t-iGyRMI~r09zt7p_ND2eP9A">
@@ -31,6 +31,7 @@
 - [Overview](#overview)
 - [Highlights](#highlights)
 - [Quick Start](#quick-start)
+- [Migrating From VibeLab](#migrating-from-vibelab)
 - [Configuration](#configuration)
 - [Research Lab - Quick Example](#research-lab-quick-example)
 - [Usage Guide](#usage-guide)
@@ -78,8 +79,8 @@ Cursor agent support is in progress and coming soon.
 
 1. **Clone the repository:**
 ```bash
-git clone https://github.com/OpenLAIR/VibeLab.git
-cd VibeLab
+git clone https://github.com/OpenLAIR/dr-claw.git
+cd dr-claw
 ```
 
 2. **Install dependencies:**
@@ -104,6 +105,29 @@ npm run dev
 5. **Open your browser** at `http://localhost:5173` (or the port you configured in `.env`)
 
 If agent web search does not work later, see **Troubleshooting Web Search** below.
+
+## Migrating From VibeLab
+
+If you used the old `VibeLab` name before the rename:
+
+1. **Update your local git remote** if you already cloned the repo:
+```bash
+git remote set-url origin git@github.com:OpenLAIR/dr-claw.git
+# or: git remote set-url origin https://github.com/OpenLAIR/dr-claw.git
+```
+
+2. **Update your global CLI install** if you installed the npm package globally:
+```bash
+npm install -g dr-claw@latest
+```
+
+3. **Update automation and shell habits** to use `dr-claw` instead of `vibelab`.
+   The legacy `vibelab` command still works during the transition, but it is now only a compatibility alias.
+
+4. **Start Dr. Claw once and let migration run.**
+   Existing auth data, local UI preferences, and former `~/vibelab` projects are migrated or detected automatically when possible.
+
+If an old project does not appear after the first launch, add it manually from the project picker or point `WORKSPACES_ROOT` at the old location temporarily.
 
 ## Configuration
 

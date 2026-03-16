@@ -5,10 +5,10 @@
 </div>
 
 <p align="center">
-<a href="https://github.com/OpenLAIR/VibeLab">
-<img src="https://img.shields.io/github/stars/OpenLAIR/VibeLab?style=for-the-badge&logo=github" alt="GitHub Stars" />
+<a href="https://github.com/OpenLAIR/dr-claw">
+<img src="https://img.shields.io/github/stars/OpenLAIR/dr-claw?style=for-the-badge&logo=github" alt="GitHub Stars" />
 </a>
-<a href="https://github.com/OpenLAIR/VibeLab/blob/main/LICENSE">
+<a href="https://github.com/OpenLAIR/dr-claw/blob/main/LICENSE">
 <img src="https://img.shields.io/badge/License-GPL--3.0-blue?style=for-the-badge" alt="License" />
 </a>
 <a href="https://join.slack.com/t/vibe-lab-group/shared_invite/zt-3r4bkcx5t-iGyRMI~r09zt7p_ND2eP9A">
@@ -31,6 +31,7 @@
 - [Overview](#overview)
 - [亮点](#亮点)
 - [快速开始](#快速开始)
+- [从 VibeLab 迁移](#从-vibelab-迁移)
 - [配置说明](#配置说明)
 - [Research Lab - 快速示例](#research-lab-quick-example)
 - [使用指南](#使用指南)
@@ -78,8 +79,8 @@ Cursor Agent 支持正在开发中，即将推出。
 
 1. **克隆仓库：**
 ```bash
-git clone https://github.com/OpenLAIR/VibeLab.git
-cd VibeLab
+git clone https://github.com/OpenLAIR/dr-claw.git
+cd dr-claw
 ```
 
 2. **安装依赖：**
@@ -104,6 +105,29 @@ npm run dev
 5. **打开浏览器** 访问 `http://localhost:5173`（或您在 `.env` 中配置的端口）
 
 如果后续 Agent 网页搜索不可用，请查看下方的**网页搜索排障**。
+
+## 从 VibeLab 迁移
+
+如果你之前使用的是 `VibeLab`：
+
+1. **如果你已经克隆过仓库，请更新本地 git remote：**
+```bash
+git remote set-url origin git@github.com:OpenLAIR/dr-claw.git
+# 或：git remote set-url origin https://github.com/OpenLAIR/dr-claw.git
+```
+
+2. **如果你全局安装过 npm CLI，请更新全局安装：**
+```bash
+npm install -g dr-claw@latest
+```
+
+3. **把自动化脚本和命令习惯从 `vibelab` 切换到 `dr-claw`。**
+   旧的 `vibelab` 命令在过渡期仍然可用，但现在只是兼容别名。
+
+4. **先启动一次 Dr. Claw，让迁移逻辑自动执行。**
+   旧的认证数据、本地 UI 偏好，以及原来位于 `~/vibelab` 下的项目，会在可行时自动迁移或自动识别。
+
+如果首次启动后仍然看不到旧项目，请在项目选择器中手动添加，或临时把 `WORKSPACES_ROOT` 指向旧目录。
 
 ## 配置说明
 

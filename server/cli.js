@@ -182,10 +182,10 @@ Environment Variables:
   CONTEXT_WINDOW      Set context window size (default: 160000)
 
 Documentation:
-  ${packageJson.homepage || 'https://github.com/OpenLAIR/VibeLab'}
+  ${packageJson.homepage || 'https://github.com/OpenLAIR/dr-claw'}
 
 Report Issues:
-  ${packageJson.bugs?.url || 'https://github.com/OpenLAIR/VibeLab/issues'}
+  ${packageJson.bugs?.url || 'https://github.com/OpenLAIR/dr-claw/issues'}
 `);
 }
 
