@@ -11,7 +11,7 @@ const CodexLogo = ({ className = 'w-5 h-5' }) => {
       className={className}
       loading="eager"
       decoding="sync"
-      fetchPriority="high"
+      fetchpriority="high"
     />
   );
 };

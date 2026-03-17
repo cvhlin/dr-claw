@@ -46,6 +46,15 @@
 Dr. Claw is a general-purpose AI research assistant designed to help researchers and builders execute end-to-end projects across different domains. From shaping an initial idea to running experiments and preparing publication-ready outputs, Dr. Claw keeps the full workflow in one place so teams can focus on research quality and iteration speed.
 
 <details>
+<summary><strong>Product Screenshot</strong></summary>
+
+<p align="center">
+  <img src="public/screenshots/chat.png" alt="Dr. Claw chat interface" width="1000">
+</p>
+
+</details>
+
+<details>
 <summary><strong>The Philosophy: Leveraged Cognition</strong></summary>
 
 <p align="center">
@@ -71,6 +80,28 @@ Dr. Claw is a general-purpose AI research assistant designed to help researchers
 - **📁 File & Git Explorer** — Browse files with syntax highlighting, live-edit, stage changes, commit, and switch branches without leaving the UI
 - **📱 Responsive & PWA-Ready** — Desktop, tablet, and mobile layouts with bottom tab bar, swipe gestures, and Add-to-Home-Screen support
 - **🔄 Session Management** — Resume conversations, manage multiple sessions, and track full history across projects
+
+</details>
+
+### Feature Gallery
+
+<details>
+<summary><strong>Expand screenshots</strong></summary>
+
+<p><strong>Project Dashboard</strong> — Start from the project overview, review status, and launch end-to-end automation.</p>
+<p align="center">
+  <img src="public/screenshots/project_dashboard.png" alt="Project dashboard interface" width="1000">
+</p>
+
+<p><strong>Skill Library</strong> — Browse reusable research skills across ideation, experimentation, and writing.</p>
+<p align="center">
+  <img src="public/screenshots/skill_library.png" alt="Skill library interface" width="1000">
+</p>
+
+<p><strong>News Dashboard</strong> — Follow research-relevant updates without leaving the workspace.</p>
+<p align="center">
+  <img src="public/screenshots/news_dashboard.png" alt="News dashboard interface" width="1000">
+</p>
 
 </details>
 
@@ -139,6 +170,15 @@ Auto Research email notifications are configured inside the app at **Settings �
 
 The core feature of Dr. Claw is the **Research Lab**.
 
+<details>
+<summary><strong>Research Lab Screenshot</strong></summary>
+
+<p align="center">
+  <img src="public/screenshots/research_lab.png" alt="Research Lab workflow" width="1000">
+</p>
+
+</details>
+
 The typical flow is:
 
 1. Configure one supported agent in **Settings**.
@@ -170,6 +210,15 @@ When you first open Dr. Claw you will see the **Projects** sidebar. You have two
 
 After creating or opening a project, Dr. Claw opens **Chat** by default. If no research pipeline exists yet, an onboarding banner appears with a **Use in Chat** button that injects a starter prompt.
 
+<details>
+<summary><strong>Chat Screenshot</strong></summary>
+
+<p align="center">
+  <img src="public/screenshots/chat.png" alt="Chat interface" width="1000">
+</p>
+
+</details>
+
 Describe your research idea — even a rough one is fine. The agent uses the `inno-pipeline-planner` skill to ask clarifying questions and then generates:
 - `.pipeline/docs/research_brief.json` (your structured research brief)
 - `.pipeline/tasks/tasks.json` (the task pipeline)
@@ -180,6 +229,16 @@ Describe your research idea — even a rough one is fine. The agent uses the `in
 <summary><strong>Step 3 — Review in Research Lab and Execute Tasks</strong></summary>
 
 Switch to **Research Lab** to review the generated tasks, progress metrics, and artifacts. Then execute tasks:
+
+<details>
+<summary><strong>Task Execution Screenshot</strong></summary>
+
+<p align="center">
+  <img src="public/screenshots/task_list.png" alt="Task list and execution flow" width="1000">
+</p>
+
+</details>
+
 1. Choose a CLI backend from the **CLI selector** (Claude Code, Gemini CLI, or Codex).
 2. In **Research Lab**, click **Go to Chat** or **Use in Chat** on a pending task.
 3. The agent executes the task and writes results back to the project.
