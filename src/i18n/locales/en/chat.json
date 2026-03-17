@@ -172,10 +172,10 @@
     "readyPrompt": {
       "claude": "Ready to use Claude with {{model}}. Start typing your message below.",
       "cursor": "Ready to use Cursor with {{model}}. Start typing your message below.",
+      "gemini": "Ready to use Gemini with {{model}}. Start typing your message below.",
       "codex": "Ready to use Codex with {{model}}. Start typing your message below.",
       "default": "Select a provider above to begin"
-    },
-    "cliBackendHint": "Choose a CLI backend (Claude Code / Cursor / Codex)"
+    }
   },
   "session": {
     "mode": {

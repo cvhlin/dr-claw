@@ -141,6 +141,16 @@ export default function ProviderSelectionEmptyState({
 
   const modelConfig = getModelConfig(provider);
   const currentModel = getModelValue(provider, claudeModel, cursorModel, codexModel, geminiModel);
+  const readyPromptKey =
+    provider === 'claude'
+      ? 'providerSelection.readyPrompt.claude'
+      : provider === 'codex'
+        ? 'providerSelection.readyPrompt.codex'
+        : provider === 'gemini'
+          ? 'providerSelection.readyPrompt.gemini'
+          : provider === 'cursor'
+            ? 'providerSelection.readyPrompt.cursor'
+            : 'providerSelection.readyPrompt.default';
 
   if (!selectedSession && !currentSessionId) {
     return (
@@ -220,11 +230,6 @@ export default function ProviderSelectionEmptyState({
                 <h2 className="text-[11px] sm:text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground/75">
                   {t('providerSelection.title')}
                 </h2>
-                <p className="text-[10px] text-muted-foreground/70 mt-1">
-                  {t('providerSelection.cliBackendHint', {
-                    defaultValue: 'Choose a CLI backend',
-                  })}
-                </p>
               </div>
 
               <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-2.5 mb-3">
@@ -296,9 +301,7 @@ export default function ProviderSelectionEmptyState({
                 </div>
 
                 <p className="text-center text-[10px] text-muted-foreground/60">
-                  {provider === 'claude'
-                    ? t('providerSelection.readyPrompt.claude', { model: claudeModel })
-                    : t('providerSelection.readyPrompt.default')}
+                  {t(readyPromptKey, { model: currentModel })}
                 </p>
                 {newSessionMode === 'workspace_qa' && (
                   <p className="text-center text-[10px] text-muted-foreground/60 mt-1.5">
