@@ -351,7 +351,7 @@ Dr. Claw is fully responsive. On mobile devices:
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Backend       │    │  Agent     │
+│   Frontend      │    │   Backend       │    │  Agent          │
 │   (React/Vite)  │◄──►│ (Express/WS)    │◄──►│  Integration    │
 │                 │    │                 │    │                │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
