@@ -84,3 +84,21 @@ echo "${CODEX_SANDBOX_NETWORK_DISABLED:-0}"
 - Claude Code：允许 `WebSearch` 和 `WebFetch`
 - Gemini CLI：允许 `google_web_search` 和 `web_fetch`
 - Codex：需要网页访问时使用 `Bypass Permissions`
+
+---
+
+## 5. `npm install` 在 `better-sqlite3` 或 `sqlite3` 报错
+
+**问题：** 执行 `npm install` 时崩溃，报错信息包含 `node-gyp rebuild`、`Request timed out` 或 `Could not find any Visual Studio installation`。
+
+**原因：** 这些包包含 C++ 原生模块。在 Windows 上，npm 会尝试从 GitHub 下载预编译的二进制文件。如果网络连接超时，它会转而尝试在本地调用 Python 和 Visual Studio 进行编译。如果本地缺少 C++ 编译环境，则会报错。
+
+**解决方案：** 无需安装Visual Studio，直接通过镜像源下载预编译的二进制文件即可：
+
+```bash
+# 1. 卸载安装失败的残留
+npm uninstall better-sqlite3 sqlite3
+
+# 2. 使用镜像源强行重新安装（下面使用了阿里云镜像源）
+npm install better-sqlite3 --better_sqlite3_binary_host_mirror=https://registry.npmmirror.com/-/binary/better-sqlite3
+npm install sqlite3 --sqlite3_binary_host_mirror=https://registry.npmmirror.com/-/binary/sqlite3
