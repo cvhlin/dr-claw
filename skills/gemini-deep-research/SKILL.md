@@ -51,7 +51,7 @@ python3 <this-skill-directory>/scripts/deep_research.py \
 
 ### Before running
 
-1. Confirm `GEMINI_API_KEY` is available in the environment. If not, check `.env` or `.claude/settings.local.json` and advise the user.
+1. **Check for `GEMINI_API_KEY`**: Run `echo $GEMINI_API_KEY` to see if it's set. If empty, **ask the user** whether they'd like to provide a Gemini API key (they can get one from https://aistudio.google.com/apikey). If the user provides one, pass it via `--api-key`. If the user declines, **do not use this skill** — fall back to other research approaches and let the user know why.
 2. Ensure `requests` is installed: `python3 -c "import requests"`. If missing, install it: `pip3 install requests`.
 
 ### Example commands
