@@ -1,6 +1,11 @@
 import { useEffect, useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
-import { decodeHtmlEntities, formatUsageLimitText, unescapeWithMathProtection } from '../utils/chatFormatting';
+import {
+  decodeHtmlEntities,
+  formatUsageLimitText,
+  splitLegacyGeminiThoughtContent,
+  unescapeWithMathProtection,
+} from '../utils/chatFormatting';
 import { parseAskUserAnswers, mergeAnswersIntoToolInput } from '../utils/messageTransforms';
 import {
   clearSessionTimerStart,
@@ -93,7 +98,22 @@ const finalizeStreamingMessage = (setChatMessages: Dispatch<SetStateAction<ChatM
     const lastIndex = updated.length - 1;
     const last = updated[lastIndex];
     if (last && last.type === 'assistant' && last.isStreaming) {
-      updated[lastIndex] = { ...last, isStreaming: false };
+      const normalizedContent = unescapeWithMathProtection(formatUsageLimitText(String(last.content || '')));
+      const legacySegments = splitLegacyGeminiThoughtContent(normalizedContent);
+      if (legacySegments) {
+        updated.splice(
+          lastIndex,
+          1,
+          ...legacySegments.map((segment) => ({
+            ...last,
+            content: segment.content,
+            isStreaming: false,
+            ...(segment.isThinking ? { isThinking: true } : { isThinking: false }),
+          })),
+        );
+      } else {
+        updated[lastIndex] = { ...last, content: normalizedContent, isStreaming: false };
+      }
     }
     return updated;
   });
@@ -192,11 +212,24 @@ export function useChatRealtimeHandlers({
       if (part.type === 'text' && part.text?.trim()) {
         let content = decodeHtmlEntities(part.text);
         content = formatUsageLimitText(content);
-        newMessages.push({
-          type: 'assistant',
-          content,
-          timestamp: new Date(),
-        });
+        content = unescapeWithMathProtection(content);
+        const legacySegments = splitLegacyGeminiThoughtContent(content);
+        if (legacySegments) {
+          newMessages.push(
+            ...legacySegments.map((segment) => ({
+              type: 'assistant',
+              content: segment.content,
+              timestamp: new Date(),
+              ...(segment.isThinking ? { isThinking: true } : {}),
+            })),
+          );
+        } else {
+          newMessages.push({
+            type: 'assistant',
+            content,
+            timestamp: new Date(),
+          });
+        }
       }
     });
 
@@ -232,13 +265,25 @@ export function useChatRealtimeHandlers({
   const handleSimpleAssistantMessage = (structuredData: any) => {
     let content = decodeHtmlEntities(structuredData.content);
     content = formatUsageLimitText(content);
+    content = unescapeWithMathProtection(content);
+    const legacySegments = splitLegacyGeminiThoughtContent(content);
+
     setChatMessages((previous) => [
       ...previous,
-      {
-        type: 'assistant',
-        content,
-        timestamp: new Date(),
-      },
+      ...(legacySegments
+        ? legacySegments.map((segment) => ({
+            type: 'assistant',
+            content: segment.content,
+            timestamp: new Date(),
+            ...(segment.isThinking ? { isThinking: true } : {}),
+          }))
+        : [
+            {
+              type: 'assistant',
+              content,
+              timestamp: new Date(),
+            },
+          ]),
     ]);
   };
 

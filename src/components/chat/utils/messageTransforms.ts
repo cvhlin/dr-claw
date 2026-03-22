@@ -1,5 +1,9 @@
 import type { ChatMessage } from '../types/types';
-import { decodeHtmlEntities, unescapeWithMathProtection } from './chatFormatting';
+import {
+  decodeHtmlEntities,
+  splitLegacyGeminiThoughtContent,
+  unescapeWithMathProtection,
+} from './chatFormatting';
 import { stripInternalContextPrefix } from '../../../utils/sessionFormatting';
 
 export interface DiffLine {
@@ -624,11 +628,25 @@ export const convertSessionMessages = (rawMessages: any[]): ChatMessage[] => {
             if (typeof text === 'string') {
               text = unescapeWithMathProtection(text);
             }
-            converted.push({
-              type: 'assistant',
-              content: text,
-              timestamp: message.timestamp || new Date().toISOString(),
-            });
+            const legacySegments = typeof text === 'string'
+              ? splitLegacyGeminiThoughtContent(text)
+              : null;
+            if (legacySegments) {
+              legacySegments.forEach((segment) => {
+                converted.push({
+                  type: 'assistant',
+                  content: segment.content,
+                  timestamp: message.timestamp || new Date().toISOString(),
+                  ...(segment.isThinking ? { isThinking: true } : {}),
+                });
+              });
+            } else {
+              converted.push({
+                type: 'assistant',
+                content: text,
+                timestamp: message.timestamp || new Date().toISOString(),
+              });
+            }
             return;
           }
 
@@ -695,11 +713,24 @@ export const convertSessionMessages = (rawMessages: any[]): ChatMessage[] => {
       }
 
       if (typeof content === 'string') {
-        converted.push({
-          type: 'assistant',
-          content: unescapeWithMathProtection(content),
-          timestamp: message.timestamp || new Date().toISOString(),
-        });
+        const normalizedContent = unescapeWithMathProtection(content);
+        const legacySegments = splitLegacyGeminiThoughtContent(normalizedContent);
+        if (legacySegments) {
+          legacySegments.forEach((segment) => {
+            converted.push({
+              type: 'assistant',
+              content: segment.content,
+              timestamp: message.timestamp || new Date().toISOString(),
+              ...(segment.isThinking ? { isThinking: true } : {}),
+            });
+          });
+        } else {
+          converted.push({
+            type: 'assistant',
+            content: normalizedContent,
+            timestamp: message.timestamp || new Date().toISOString(),
+          });
+        }
       }
     }
   });
