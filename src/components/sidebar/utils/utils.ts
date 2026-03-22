@@ -68,8 +68,8 @@ export const getSessionName = (session: SessionWithProvider, t: TFunction): stri
 };
 
 export const getSessionMode = (session: SessionWithProvider) => {
-  if (session.mode === 'workspace_qa') {
-    return 'workspace_qa';
+  if (session.mode === 'workspace_qa' || session.mode === 'research') {
+    return session.mode;
   }
 
   if (typeof window !== 'undefined' && session.__projectName) {
