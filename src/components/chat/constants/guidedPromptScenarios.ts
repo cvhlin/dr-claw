@@ -64,17 +64,17 @@ export const GUIDED_PROMPT_SCENARIOS: GuidedPromptScenario[] = [
     skills: ['inno-rebuttal'],
   },
   {
-    id: 'grant-proposal',
-    icon: '📝',
-    titleKey: 'guidedStarter.scenarios.grantProposal.title',
-    descriptionKey: 'guidedStarter.scenarios.grantProposal.description',
-    skills: ['inno-grant-proposal'],
-  },
-  {
     id: 'presentation-promotion',
     icon: '🎬',
     titleKey: 'guidedStarter.scenarios.presentationPromotion.title',
     descriptionKey: 'guidedStarter.scenarios.presentationPromotion.description',
     skills: ['making-academic-presentations'],
+  },
+  {
+    id: 'grant-proposal',
+    icon: '📝',
+    titleKey: 'guidedStarter.scenarios.grantProposal.title',
+    descriptionKey: 'guidedStarter.scenarios.grantProposal.description',
+    skills: ['inno-grant-proposal'],
   },
 ];
