@@ -72,6 +72,19 @@ Dr. Claw is a general-purpose AI research assistant designed to help researchers
 - **🗂️ Chat-Driven Pipeline** — Describe your research idea in Chat; the agent uses the `inno-pipeline-planner` skill to interactively generate a structured research brief and task list — no manual templates needed
 - **🤖 Multi-Agent Backend** — Seamlessly switch between Claude Code, Gemini CLI, and Codex as your execution engines
 
+### What the Pipeline Produces
+
+| | Artifact | Location | Description |
+|---|---|---|---|
+| 📚 | Survey reports | `Survey/reports/` | Literature reviews with citations from arXiv, Semantic Scholar, and web sources |
+| 💡 | Research ideas | `Ideation/ideas/` | Brainstorming outputs with multi-persona evaluation scores |
+| 🔬 | Experiment code | `Experiment/core_code/` | Implementation from the plan → implement → judge loop |
+| 📊 | Analysis results | `Experiment/analysis/` | Statistical analysis, tables, and paper-ready figures |
+| 📝 | Paper draft | `Publication/paper/` | Academic manuscript (IEEE/ACM format) with citations and LaTeX math |
+| 🎞️ | Presentation | `Promotion/slides/` | Slide deck, TTS narration audio, and demo video |
+
+> See [docs/pipeline-outputs.md](docs/pipeline-outputs.md) for the full artifact list and project directory structure.
+
 <details>
 <summary><span style="font-size: 1.17em; font-weight: 600;">More Features</span></summary>
 
