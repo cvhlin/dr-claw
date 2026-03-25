@@ -672,7 +672,7 @@ async function saveProjectConfig(config) {
 }
 
 export function encodeProjectPath(projectPath) {
-  return path.resolve(projectPath).replace(/[\\/:\s~_]/g, '-');
+  return path.resolve(projectPath).replace(/[\\/:\s~_.]/g, '-');
 }
 
 // Generate better display name from path
@@ -2525,7 +2525,24 @@ async function addProjectManually(projectPath, displayName = null, userId = null
     throw new Error(`Path does not exist: ${absolutePath}`);
   }
 
-  const projectName = absolutePath.replace(/[\\/:\s~_]/g, '-');
+  const projectName = absolutePath.replace(/[\\/:\s~_.]/g, '-');
+
+  // Check for existing project with the same path (may have legacy encoded ID)
+  const allProjects = projectDb.getAllProjects(userId);
+  const existingByPath = allProjects.find((p) => p.path === absolutePath);
+  if (existingByPath && existingByPath.id !== projectName) {
+    return {
+      name: existingByPath.id,
+      path: absolutePath,
+      fullPath: absolutePath,
+      displayName: displayName || existingByPath.display_name || await generateDisplayName(existingByPath.id, absolutePath),
+      isManuallyAdded: Boolean(existingByPath.metadata?.manuallyAdded),
+      createdAt: existingByPath.created_at,
+      sessions: [],
+      cursorSessions: [],
+      alreadyExists: true,
+    };
+  }
 
   projectDb.upsertProject(projectName, userId, displayName, absolutePath, 0, new Date().toISOString(), { manuallyAdded: true });
 
