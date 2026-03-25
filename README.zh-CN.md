@@ -193,7 +193,7 @@ claude    # 或: gemini | codex
 > Read .claude/skills/inno-experiment-analysis/SKILL.md and follow it to analyze my results.
 ```
 
-如果后续 Agent 网页搜索不可用，请查看[网页搜索排障](#第-4-步--网页搜索排障)。
+如果后续 Agent 网页搜索不可用，请查看[网页搜索排障](#troubleshooting-web-search-zh)。
 
 ## 接入 OpenClaw
 
@@ -551,6 +551,7 @@ Dr. Claw 的核心功能是 **Research Lab**。
 </details>
 
 <details>
+<a id="troubleshooting-web-search-zh"></a>
 <summary><strong>第 4 步 — 网页搜索排障</strong></summary>
 
 如果 Agent 不能搜索网页，通常是当前权限设置过于严格。除此之外，也需要确认当前进程是否仍然启用了运行时网络锁。

@@ -199,7 +199,7 @@ Skills from `dr-claw/skills/` are automatically symlinked into each project's `.
 
 
 
-If agent web search does not work later, see [Troubleshooting Web Search](#step-4--troubleshooting-web-search) below.
+If agent web search does not work later, see [Troubleshooting Web Search](#troubleshooting-web-search) below.
 
 ## OpenClaw Integration
 
@@ -556,6 +556,7 @@ If you want Dr. Claw to execute the generated task list end-to-end for you, use 
 
 </details>
 
+<a id="troubleshooting-web-search"></a>
 <details>
 <summary><strong>Step 4 — Troubleshooting Web Search</strong></summary>
 
