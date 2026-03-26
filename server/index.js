@@ -383,7 +383,8 @@ function shouldAutoOpenUrlFromOutput(value = '') {
         normalized.includes('open this url') ||
         normalized.includes('continue in your browser') ||
         normalized.includes('press enter to open') ||
-        normalized.includes('open_url:')
+        normalized.includes('open_url:') ||
+        normalized.includes('paste code here')
     );
 }
 
