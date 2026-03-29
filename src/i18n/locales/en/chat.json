@@ -1,4 +1,8 @@
 {
+  "status": {
+    "thinking": "Thinking...",
+    "runningCode": "Running code"
+  },
   "codeBlock": {
     "copy": "Copy",
     "copied": "Copied",
@@ -12,6 +16,10 @@
     "cursor": "Cursor",
     "codex": "Codex",
     "gemini": "Gemini"
+  },
+  "error": {
+    "retry": "Retry",
+    "usageLimitHint": "You can retry when your usage limit resets"
   },
   "tools": {
     "settings": "Tool Settings",
@@ -87,6 +95,10 @@
   "usageLimit": {
     "resetAt": "Claude usage limit reached. Your limit will reset at **{{time}} {{timezone}}** - {{date}}"
   },
+  "tokenUsage": {
+    "unavailable": "Ctx N/A",
+    "unavailableTitle": "Current context usage is unavailable for this session."
+  },
   "codex": {
     "permissionMode": "Permission Mode",
     "modes": {
@@ -108,8 +120,10 @@
     "placeholderDefault": "Type your message...",
     "disabled": "Input disabled",
     "attachFiles": "Attach files",
+    "attachReferences": "Attach references",
     "attachImages": "Attach images",
     "dropFilesHere": "Drop files here",
+    "attachmentOnlyFallback": "Please inspect the attached files and help me with them.",
     "send": "Send",
     "stop": "Stop",
     "hintText": {
@@ -168,13 +182,15 @@
       "anthropic": "by Anthropic",
       "openai": "by OpenAI",
       "google": "by Google",
-      "cursorEditor": "AI Code Editor"
+      "cursorEditor": "AI Code Editor",
+      "openrouter": "Any Model via API"
     },
     "readyPrompt": {
       "claude": "Ready to use Claude with {{model}}. Start typing your message below.",
       "cursor": "Ready to use Cursor with {{model}}. Start typing your message below.",
       "gemini": "Ready to use Gemini with {{model}}. Start typing your message below.",
       "codex": "Ready to use Codex with {{model}}. Start typing your message below.",
+      "openrouter": "Ready to use OpenRouter with {{model}}. Start typing your message below.",
       "default": "Select a provider above to begin"
     }
   },
@@ -398,6 +414,11 @@
         "description": "Turn the paper into slides, narration scripts, TTS audio, and a demo video."
       }
     }
+  },
+  "attachedPrompt": {
+    "showPrompt": "Show prompt",
+    "hidePrompt": "Hide prompt",
+    "remove": "Remove"
   },
   "pipelineOnboarding": {
     "noBrief": {

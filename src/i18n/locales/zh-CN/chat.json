@@ -1,4 +1,8 @@
 {
+  "status": {
+    "thinking": "思考中...",
+    "runningCode": "运行代码中"
+  },
   "codeBlock": {
     "copy": "复制",
     "copied": "已复制",
@@ -12,6 +16,10 @@
     "cursor": "Cursor",
     "codex": "Codex",
     "gemini": "Gemini"
+  },
+  "error": {
+    "retry": "重试",
+    "usageLimitHint": "使用限制重置后可以重试"
   },
   "tools": {
     "settings": "工具设置",
@@ -87,6 +95,10 @@
   "usageLimit": {
     "resetAt": "Claude 使用限制已达到。您的限制将在 **{{time}} {{timezone}}** - {{date}} 重置"
   },
+  "tokenUsage": {
+    "unavailable": "上下文 N/A",
+    "unavailableTitle": "当前无法获取此会话的上下文占用情况。"
+  },
   "codex": {
     "permissionMode": "权限模式",
     "modes": {
@@ -108,8 +120,10 @@
     "placeholderDefault": "输入您的消息...",
     "disabled": "输入已禁用",
     "attachFiles": "附加文件",
+    "attachReferences": "附加文献",
     "attachImages": "附加图片",
     "dropFilesHere": "拖放文件到此处",
+    "attachmentOnlyFallback": "请先查看我附上的文件，并基于这些文件帮助我。",
     "send": "发送",
     "stop": "停止",
     "hintText": {
@@ -168,13 +182,15 @@
       "anthropic": "Anthropic",
       "openai": "OpenAI",
       "google": "Google",
-      "cursorEditor": "AI 代码编辑器"
+      "cursorEditor": "AI 代码编辑器",
+      "openrouter": "通过 API 使用任意模型"
     },
     "readyPrompt": {
       "claude": "已准备好使用 Claude {{model}}。在下方输入您的消息。",
       "cursor": "已准备好使用 Cursor {{model}}。在下方输入您的消息。",
       "gemini": "已准备好使用 Gemini {{model}}。在下方输入您的消息。",
       "codex": "已准备好使用 Codex {{model}}。在下方输入您的消息。",
+      "openrouter": "已准备好使用 OpenRouter {{model}}。在下方输入您的消息。",
       "default": "请在上方选择一个供应商以开始"
     }
   },
@@ -398,6 +414,11 @@
         "description": "基于论文内容生成演示文稿、旁白脚本、音频与演示视频。"
       }
     }
+  },
+  "attachedPrompt": {
+    "showPrompt": "显示提示词",
+    "hidePrompt": "隐藏提示词",
+    "remove": "移除"
   },
   "pipelineOnboarding": {
     "noBrief": {

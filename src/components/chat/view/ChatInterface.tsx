@@ -20,13 +20,16 @@ import { authenticatedFetch } from '../../../utils/api';
 import { readCliAvailability, writeCliAvailability } from '../../../utils/cliAvailability';
 import { Button } from '../../ui/button';
 import type { PendingAutoIntake } from '../../../types/app';
-import { CLAUDE_MODELS, CURSOR_MODELS, CODEX_MODELS, GEMINI_MODELS } from '../../../../shared/modelConstants';
+import { CLAUDE_MODELS, CURSOR_MODELS, CODEX_MODELS, GEMINI_MODELS, OPENROUTER_MODELS } from '../../../../shared/modelConstants';
+import { getProviderDisplayName } from '../utils/chatFormatting';
+
 
 const DEFAULT_PROVIDER_AVAILABILITY: Record<Provider, ProviderAvailability> = {
   claude: { cliAvailable: true, cliCommand: 'claude', installHint: null },
   cursor: { cliAvailable: true, cliCommand: 'agent', installHint: null },
   codex: { cliAvailable: true, cliCommand: 'codex', installHint: null },
   gemini: { cliAvailable: true, cliCommand: 'gemini', installHint: null },
+  openrouter: { cliAvailable: true, cliCommand: 'openrouter', installHint: null },
 };
 
 const INTAKE_GREETING = `Hello! I'm your Dr. Claw research assistant, here to help you set up your research pipeline.\n\nTo get started, could you tell me about your research field or topic?`;
@@ -50,12 +53,14 @@ const ANALYSIS_PROVIDERS: Array<{ id: Provider; label: string }> = [
   { id: 'claude', label: 'Claude Code' },
   { id: 'gemini', label: 'Gemini CLI' },
   { id: 'codex', label: 'Codex' },
+  { id: 'openrouter', label: 'OpenRouter' },
 ];
 
 const getProviderModelConfig = (provider: Provider) => {
   if (provider === 'claude') return CLAUDE_MODELS;
   if (provider === 'codex') return CODEX_MODELS;
   if (provider === 'gemini') return GEMINI_MODELS;
+  if (provider === 'openrouter') return OPENROUTER_MODELS;
   return CURSOR_MODELS;
 };
 
@@ -123,6 +128,8 @@ function ChatInterface({
     setCodexModel,
     geminiModel,
     setGeminiModel,
+    openrouterModel,
+    setOpenrouterModel,
     permissionMode,
     pendingPermissionRequests,
     setPendingPermissionRequests,
@@ -162,6 +169,8 @@ function ChatInterface({
     showLoadAllOverlay,
     claudeStatus,
     setClaudeStatus,
+    statusTextOverride,
+    setStatusTextOverride,
     createDiff,
     scrollContainerRef,
     scrollToBottom,
@@ -183,6 +192,8 @@ function ChatInterface({
   const {
     input,
     setInput,
+    attachedPrompt,
+    setAttachedPrompt,
     textareaRef,
     inputHighlightRef,
     isTextareaExpanded,
@@ -226,6 +237,7 @@ function ChatInterface({
     isInputFocused,
     intakeGreeting,
     setIntakeGreeting,
+    setPendingStageTagKeys,
     submitProgrammaticInput,
   } = useChatComposerState({
     selectedProject,
@@ -238,6 +250,7 @@ function ChatInterface({
     claudeModel,
     codexModel,
     geminiModel,
+    openrouterModel,
     isLoading,
     canAbortSession,
     tokenBudget,
@@ -270,6 +283,7 @@ function ChatInterface({
     setIsLoading,
     setCanAbortSession,
     setClaudeStatus,
+    setStatusTextOverride,
     setTokenBudget,
     setIsSystemSessionChange,
     setPendingPermissionRequests,
@@ -283,6 +297,19 @@ function ChatInterface({
     onReplaceTemporarySession,
     onNavigateToSession,
   });
+
+  const chatMessagesRef = useRef(chatMessages);
+  chatMessagesRef.current = chatMessages;
+
+  const handleRetry = useCallback(() => {
+    const msgs = chatMessagesRef.current;
+    let lastUserMessage: (typeof msgs)[number] | undefined;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].type === 'user') { lastUserMessage = msgs[i]; break; }
+    }
+    if (!lastUserMessage?.content) return;
+    submitProgrammaticInput(lastUserMessage.content);
+  }, [submitProgrammaticInput]);
 
   const autoIntakeTriggeredRef = useRef(false);
   const lastAutoIntakeTriggerIdRef = useRef<string | null>(null);
@@ -316,6 +343,7 @@ function ChatInterface({
       cursor: cached.cursor ?? DEFAULT_PROVIDER_AVAILABILITY.cursor,
       codex: cached.codex ?? DEFAULT_PROVIDER_AVAILABILITY.codex,
       gemini: cached.gemini ?? DEFAULT_PROVIDER_AVAILABILITY.gemini,
+      openrouter: cached.openrouter ?? DEFAULT_PROVIDER_AVAILABILITY.openrouter,
     };
   });
 
@@ -323,8 +351,18 @@ function ChatInterface({
     if (importedProjectAnalysisProvider === 'claude') return claudeModel;
     if (importedProjectAnalysisProvider === 'codex') return codexModel;
     if (importedProjectAnalysisProvider === 'gemini') return geminiModel;
+    if (importedProjectAnalysisProvider === 'openrouter') return openrouterModel;
     return cursorModel;
-  }, [claudeModel, codexModel, cursorModel, geminiModel, importedProjectAnalysisProvider]);
+  }, [claudeModel, codexModel, cursorModel, geminiModel, openrouterModel, importedProjectAnalysisProvider]);
+
+  const handleStartTaskInChat = useCallback((prompt?: string, task?: { stage?: string } | null) => {
+    const nextPrompt = prompt && prompt.trim()
+      ? prompt
+      : t('tasks.nextTaskPrompt', { defaultValue: 'Start the next task' });
+    setInput(nextPrompt);
+    const stage = String(task?.stage || '').trim().toLowerCase();
+    setPendingStageTagKeys(stage ? [stage] : []);
+  }, [setInput, setPendingStageTagKeys, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -335,6 +373,7 @@ function ChatInterface({
         { provider: 'cursor', endpoint: '/api/cli/cursor/status', fallbackCommand: 'agent' },
         { provider: 'codex', endpoint: '/api/cli/codex/status', fallbackCommand: 'codex' },
         { provider: 'gemini', endpoint: '/api/cli/gemini/status', fallbackCommand: 'gemini' },
+        { provider: 'openrouter', endpoint: '/api/cli/openrouter/status', fallbackCommand: 'openrouter' },
       ];
 
       const results = await Promise.all(checks.map(async ({ provider: nextProvider, endpoint, fallbackCommand }) => {
@@ -380,7 +419,7 @@ function ChatInterface({
 
   useEffect(() => {
     if (providerAvailability[provider]?.cliAvailable === false) {
-      const fallbackProvider = (['claude', 'cursor', 'codex', 'gemini'] as const).find(
+      const fallbackProvider = (['claude', 'cursor', 'codex', 'gemini', 'openrouter'] as const).find(
         (candidate) => providerAvailability[candidate]?.cliAvailable !== false,
       );
 
@@ -590,12 +629,7 @@ function ChatInterface({
   }, [onOpenShellForSession]);
 
   if (!selectedProject) {
-    const selectedProviderLabel =
-      provider === 'cursor'
-        ? t('messageTypes.cursor')
-        : provider === 'codex'
-          ? t('messageTypes.codex')
-          : t('messageTypes.claude');
+    const selectedProviderLabel = getProviderDisplayName(provider);
 
     return (
       <>
@@ -611,9 +645,7 @@ function ChatInterface({
         </div>
         <div className="flex justify-end px-4 pb-4">
           <ChatTaskProgressPill
-            onStartTask={(prompt?: string) =>
-              setInput(prompt && prompt.trim() ? prompt : t('tasks.nextTaskPrompt', { defaultValue: 'Start the next task' }))
-            }
+            onStartTask={handleStartTaskInChat}
             onShowAllTasks={onShowAllTasks}
           />
         </div>
@@ -704,6 +736,7 @@ function ChatInterface({
           setProvider={(nextProvider) => setProvider(nextProvider as Provider)}
           textareaRef={textareaRef}
           setInput={setInput}
+          setAttachedPrompt={setAttachedPrompt}
           claudeModel={claudeModel}
           setClaudeModel={setClaudeModel}
           cursorModel={cursorModel}
@@ -712,6 +745,8 @@ function ChatInterface({
           setCodexModel={setCodexModel}
           geminiModel={geminiModel}
           setGeminiModel={setGeminiModel}
+          openrouterModel={openrouterModel}
+          setOpenrouterModel={setOpenrouterModel}
           isLoadingMoreMessages={isLoadingMoreMessages}
           hasMoreMessages={hasMoreMessages}
           totalMessages={totalMessages}
@@ -734,21 +769,21 @@ function ChatInterface({
           showThinking={showThinking}
           selectedProject={selectedProject}
           isLoading={isLoading}
+          statusText={statusTextOverride || claudeStatus?.text}
           providerAvailability={providerAvailability}
           newSessionMode={newSessionMode}
           onNewSessionModeChange={onNewSessionModeChange}
+          onRetry={handleRetry}
         />
 
         <div className="px-2 sm:px-4 max-w-5xl mx-auto w-full">
           <div className="flex gap-4">
             <div className="flex-1 min-w-0">
-              <SkillShortcutsPanel setInput={setInput} textareaRef={textareaRef} />
+              <SkillShortcutsPanel setInput={setInput} textareaRef={textareaRef} setAttachedPrompt={setAttachedPrompt} />
             </div>
             <div className="flex-1 min-w-0">
               <ChatTaskProgressPill
-                onStartTask={(prompt?: string) =>
-                  setInput(prompt && prompt.trim() ? prompt : t('tasks.nextTaskPrompt', { defaultValue: 'Start the next task' }))
-                }
+                onStartTask={handleStartTaskInChat}
                 onShowAllTasks={onShowAllTasks}
               />
             </div>
@@ -759,7 +794,7 @@ function ChatInterface({
           pendingPermissionRequests={pendingPermissionRequests}
           handlePermissionDecision={handlePermissionDecision}
           handleGrantToolPermission={handleGrantToolPermission}
-          claudeStatus={claudeStatus}
+          claudeStatus={claudeStatus ? { ...claudeStatus, text: statusTextOverride || claudeStatus.text } : claudeStatus}
           isLoading={isLoading}
           onAbortSession={handleAbortSession}
           provider={provider}
@@ -770,7 +805,7 @@ function ChatInterface({
           tokenBudget={tokenBudget}
           slashCommandsCount={slashCommandsCount}
           onToggleCommandMenu={handleToggleCommandMenu}
-          hasInput={Boolean(input.trim())}
+          hasInput={Boolean(input.trim()) || attachedFiles.length > 0}
           onClearInput={handleClearInput}
           isUserScrolledUp={isUserScrolledUp}
           hasMessages={chatMessages.length > 0}
@@ -807,18 +842,20 @@ function ChatInterface({
           onInputFocusChange={handleInputFocusChange}
           isInputFocused={isInputFocused}
           placeholder={t('input.placeholder', {
-            provider:
-              provider === 'cursor'
-                ? t('messageTypes.cursor')
-                : provider === 'codex'
-                ? t('messageTypes.codex')
-                : provider === 'gemini'
-                ? t('messageTypes.gemini')
-                : t('messageTypes.claude'),
+            provider: getProviderDisplayName(provider),
           })}
           isTextareaExpanded={isTextareaExpanded}
           sendByCtrlEnter={sendByCtrlEnter}
           onTranscript={handleTranscript}
+          projectName={selectedProject?.name}
+          onReferenceContext={(context) => {
+            setInput((prev) => prev ? `${prev}\n\n${context}` : context);
+          }}
+          attachedPrompt={attachedPrompt}
+          onRemoveAttachedPrompt={() => setAttachedPrompt(null)}
+          onUpdateAttachedPrompt={(text) =>
+            setAttachedPrompt((prev) => prev ? { ...prev, promptText: text } : null)
+          }
         />
 
         </div>

@@ -672,7 +672,7 @@ async function saveProjectConfig(config) {
 }
 
 export function encodeProjectPath(projectPath) {
-  return path.resolve(projectPath).replace(/[\\/:\s~_]/g, '-');
+  return path.resolve(projectPath).replace(/[\\/:\s~_.]/g, '-');
 }
 
 // Generate better display name from path
@@ -857,6 +857,7 @@ function mapIndexedSessionToProjectSession(session, provider) {
   const createdAt = session?.created_at || session?.createdAt || lastActivity;
   const messageCount = Number(session?.message_count ?? session?.messageCount ?? 0);
   const baseName = session?.display_name || session?.name || session?.summary || null;
+  const tags = Array.isArray(session?.tags) ? session.tags : [];
 
   if (provider === 'cursor') {
     return {
@@ -866,6 +867,7 @@ function mapIndexedSessionToProjectSession(session, provider) {
       lastActivity,
       messageCount,
       mode,
+      tags,
       __provider: 'cursor',
     };
   }
@@ -879,6 +881,7 @@ function mapIndexedSessionToProjectSession(session, provider) {
       lastActivity,
       messageCount,
       mode,
+      tags,
       __provider: 'codex',
     };
   }
@@ -892,7 +895,22 @@ function mapIndexedSessionToProjectSession(session, provider) {
       lastActivity,
       messageCount,
       mode,
+      tags,
       __provider: 'gemini',
+    };
+  }
+
+  if (provider === 'openrouter') {
+    return {
+      id: session.id,
+      summary: baseName || 'OpenRouter Session',
+      name: baseName || 'OpenRouter Session',
+      createdAt,
+      lastActivity,
+      messageCount,
+      mode,
+      tags,
+      __provider: 'openrouter',
     };
   }
 
@@ -903,6 +921,7 @@ function mapIndexedSessionToProjectSession(session, provider) {
     lastActivity,
     messageCount,
     mode,
+    tags,
     __provider: 'claude',
   };
 }
@@ -915,6 +934,8 @@ function getSessionPlaceholderName(provider) {
       return 'Codex Session';
     case 'gemini':
       return 'Gemini Session';
+    case 'openrouter':
+      return 'OpenRouter Session';
     default:
       return 'New Session';
   }
@@ -1038,6 +1059,45 @@ async function reconcileGeminiSessionIndex(projectPath, options = {}) {
   });
 }
 
+async function reconcileOpenRouterSessionIndex(projectPath, options = {}) {
+  const { sessionId = null, projectName = null } = options;
+  if (!sessionId) return;
+  const resolvedProjectName = projectName || encodeProjectPath(projectPath);
+  const sessionFile = path.join(os.homedir(), '.dr-claw', 'openrouter-sessions', `${sessionId}.jsonl`);
+  try {
+    const raw = await fs.readFile(sessionFile, 'utf-8');
+    const lines = raw.trim().split('\n').filter(Boolean);
+    let displayName = null;
+    let messageCount = 0;
+    let lastActivity = null;
+    for (const line of lines) {
+      try {
+        const entry = JSON.parse(line);
+        if (entry.role === 'user' && !displayName) {
+          const raw = (entry.content || '').replace(/\s*\[Context:[^\]]*\]\s*/gi, '').trim();
+          displayName = raw.slice(0, 100) || null;
+        }
+        if (entry.role === 'user' || entry.role === 'assistant') {
+          messageCount++;
+        }
+        if (entry.ts) lastActivity = entry.ts;
+      } catch {}
+    }
+    const { sessionDb } = await import('./database/db.js');
+    sessionDb.upsertSession(
+      sessionId,
+      resolvedProjectName,
+      'openrouter',
+      displayName || 'OpenRouter Session',
+      lastActivity || new Date().toISOString(),
+      messageCount,
+      null,
+    );
+  } catch (err) {
+    console.warn(`[OpenRouter] Failed to reconcile session ${sessionId}:`, err.message);
+  }
+}
+
 async function reconcileCodexSessionIndex(projectPath, options = {}) {
   const { limit = 0, sessionId = null, previousSessionId = null, projectName = null } = options;
   const sessions = await getCodexSessions(projectPath, {
@@ -1153,6 +1213,7 @@ async function getProjects(userId, progressCallback = null) {
       const cursorSessions = projectSessions.filter((session) => session.provider === 'cursor');
       const codexSessions = projectSessions.filter((session) => session.provider === 'codex');
       const geminiSessions = projectSessions.filter((session) => session.provider === 'gemini');
+      const openrouterSessions = projectSessions.filter((session) => session.provider === 'openrouter');
 
       project.sessions = claudeSessions.slice(0, 5).map((session) => mapIndexedSessionToProjectSession(session, 'claude'));
       project.sessionMeta = {
@@ -1162,6 +1223,7 @@ async function getProjects(userId, progressCallback = null) {
       project.cursorSessions = cursorSessions.slice(0, 5).map((session) => mapIndexedSessionToProjectSession(session, 'cursor'));
       project.codexSessions = codexSessions.slice(0, 5).map((session) => mapIndexedSessionToProjectSession(session, 'codex'));
       project.geminiSessions = geminiSessions.slice(0, 5).map((session) => mapIndexedSessionToProjectSession(session, 'gemini'));
+      project.openrouterSessions = openrouterSessions.slice(0, 5).map((session) => mapIndexedSessionToProjectSession(session, 'openrouter'));
 
       const taskmasterResult = await detectTaskMasterFolder(actualProjectDir).catch(() => null);
 
@@ -1422,7 +1484,10 @@ async function parseJsonlSessions(filePath, projectName = null, dbSessionMap = n
                 lastAssistantMessage: null,
                 mode: dbSessionMap && dbSessionMap.has(entry.sessionId)
                   ? (readExplicitSessionModeFromMetadata(dbSessionMap.get(entry.sessionId).metadata) || 'research')
-                  : 'research'
+                  : 'research',
+                tags: dbSessionMap && dbSessionMap.has(entry.sessionId)
+                  ? (Array.isArray(dbSessionMap.get(entry.sessionId).tags) ? dbSessionMap.get(entry.sessionId).tags : [])
+                  : []
               });
             }
 
@@ -1735,6 +1800,80 @@ async function getSessionMessages(projectName, sessionId, limit = null, offset =
     }
   }
 
+  if (provider === 'openrouter') {
+    const openrouterSessionFile = path.join(os.homedir(), '.dr-claw', 'openrouter-sessions', `${sessionId}.jsonl`);
+    console.log(`[DEBUG] Reading OpenRouter session file: ${openrouterSessionFile}`);
+    try {
+      await fs.access(openrouterSessionFile);
+      const messages = [];
+      const raw = await fs.readFile(openrouterSessionFile, 'utf-8');
+      for (const line of raw.trim().split('\n').filter(Boolean)) {
+        try {
+          const entry = JSON.parse(line);
+          if (entry.role === 'system') continue;
+          if (entry.role === 'user') {
+            messages.push({
+              type: 'message',
+              role: 'user',
+              content: entry.content || '',
+              timestamp: entry.ts,
+            });
+          } else if (entry.role === 'assistant') {
+            // Emit text content as a message if present
+            if (entry.content) {
+              messages.push({
+                type: 'message',
+                role: 'assistant',
+                content: entry.content,
+                timestamp: entry.ts,
+              });
+            }
+            // Emit tool_use entries for each tool call (matches Codex/Claude history format)
+            if (Array.isArray(entry.tool_calls)) {
+              for (const tc of entry.tool_calls) {
+                let toolInput;
+                try { toolInput = tc.function?.arguments || '{}'; } catch { toolInput = '{}'; }
+                messages.push({
+                  type: 'tool_use',
+                  timestamp: entry.ts,
+                  toolName: tc.function?.name || 'unknown',
+                  toolInput,
+                  toolCallId: tc.id,
+                });
+              }
+            }
+          } else if (entry.role === 'tool') {
+            messages.push({
+              type: 'tool_result',
+              role: 'tool',
+              output: entry.content,
+              tool_call_id: entry.tool_call_id,
+              toolCallId: entry.tool_call_id,
+              timestamp: entry.ts,
+            });
+          }
+        } catch {}
+      }
+
+      console.log(`[DEBUG] Found ${messages.length} valid messages in OpenRouter session file`);
+      const total = messages.length;
+      if (limit === null) return messages;
+
+      const startIndex = Math.max(0, total - offset - limit);
+      const endIndex = total - offset;
+      return {
+        messages: messages.slice(startIndex, endIndex),
+        total,
+        hasMore: startIndex > 0,
+        offset,
+        limit,
+      };
+    } catch (e) {
+      console.warn(`Could not read OpenRouter session ${sessionId}:`, e.message);
+      return limit === null ? [] : { messages: [], total: 0, hasMore: false };
+    }
+  }
+
   const projectDir = path.join(os.homedir(), '.claude', 'projects', projectName);
 
   try {
@@ -1900,6 +2039,32 @@ async function deleteSession(projectName, sessionId, provider = 'claude') {
     }
 
     throw new Error(`Gemini session ${sessionId} not found in file system or index`);
+  }
+
+  if (provider === 'openrouter') {
+    const openrouterSessionFile = path.join(os.homedir(), '.dr-claw', 'openrouter-sessions', `${sessionId}.jsonl`);
+    let deletedFile = false;
+    try {
+      await fs.unlink(openrouterSessionFile);
+      deletedFile = true;
+    } catch (e) {
+      if (e?.code !== 'ENOENT') {
+        console.error(`[OpenRouter] Failed to delete session ${sessionId}:`, e.message);
+        throw new Error(`Failed to delete OpenRouter session: ${e.message}`);
+      }
+    }
+
+    const deletedIndex = indexedSession?.provider === 'openrouter' || deletedFile;
+    if (deletedIndex) {
+      sessionDb.deleteSession(sessionId);
+    }
+
+    if (deletedFile || deletedIndex) {
+      console.log(`[OpenRouter] Deleted session ${sessionId}${deletedFile ? ` file: ${openrouterSessionFile}` : ' from index only'}`);
+      return true;
+    }
+
+    throw new Error(`OpenRouter session ${sessionId} not found in file system or index`);
   }
 
   const projectDir = path.join(os.homedir(), '.claude', 'projects', projectName);
@@ -2525,7 +2690,27 @@ async function addProjectManually(projectPath, displayName = null, userId = null
     throw new Error(`Path does not exist: ${absolutePath}`);
   }
 
-  const projectName = absolutePath.replace(/[\\/:\s~_]/g, '-');
+  const projectName = encodeProjectPath(absolutePath);
+
+  // Check for existing project with the same path (may have legacy encoded ID)
+  const existingByPath = projectDb.getProjectByPath(absolutePath, userId);
+  if (existingByPath) {
+    if (existingByPath.id !== projectName) {
+      // Legacy ID detected — migrate to new encoding
+      projectDb.migrateProjectIdentity(existingByPath.id, projectName, absolutePath);
+    }
+    return {
+      name: projectName,
+      path: absolutePath,
+      fullPath: absolutePath,
+      displayName: displayName || existingByPath.display_name || await generateDisplayName(projectName, absolutePath),
+      isManuallyAdded: Boolean(existingByPath.metadata?.manuallyAdded),
+      createdAt: existingByPath.created_at,
+      sessions: [],
+      cursorSessions: [],
+      alreadyExists: true,
+    };
+  }
 
   projectDb.upsertProject(projectName, userId, displayName, absolutePath, 0, new Date().toISOString(), { manuallyAdded: true });
 
@@ -2665,7 +2850,10 @@ async function getCursorSessions(projectPath, options = {}) {
             mode: dbSessionMap.has(sessionId)
               ? (readExplicitSessionModeFromMetadata(dbSessionMap.get(sessionId).metadata) || 'research')
               : 'research',
-            projectPath
+            projectPath,
+            tags: dbSessionMap.has(sessionId)
+              ? (Array.isArray(dbSessionMap.get(sessionId).tags) ? dbSessionMap.get(sessionId).tags : [])
+              : [],
           });
           seenSessionIds.add(sessionId);
         } catch (error) {
@@ -2726,6 +2914,9 @@ async function getGeminiSessions(projectPath, optionsOrUserId = null) {
           ? (readExplicitSessionModeFromMetadata(dbSessionMap.get(session.id).metadata) || normalizeSessionMode(session.mode))
           : normalizeSessionMode(session.mode),
         projectPath,
+        tags: dbSessionMap.has(session.id)
+          ? (Array.isArray(dbSessionMap.get(session.id).tags) ? dbSessionMap.get(session.id).tags : [])
+          : (Array.isArray(session.tags) ? session.tags : []),
       }));
     const filteredSessions = targetSessionId
       ? dedupedSessions.filter((session) => session.id === targetSessionId)
@@ -3037,6 +3228,9 @@ async function getCodexSessions(projectPath, options = {}) {
       mode: dbSessionMap.has(session.id)
         ? (readExplicitSessionModeFromMetadata(dbSessionMap.get(session.id).metadata) || normalizeSessionMode(session.mode))
         : normalizeSessionMode(session.mode),
+      tags: dbSessionMap.has(session.id)
+        ? (Array.isArray(dbSessionMap.get(session.id).tags) ? dbSessionMap.get(session.id).tags : [])
+        : (Array.isArray(session.tags) ? session.tags : []),
     }));
     const filteredSessions = targetSessionId
       ? dedupedSessions.filter((session) => session.id === targetSessionId)
@@ -3626,6 +3820,7 @@ export {
   reconcileClaudeSessionIndex,
   reconcileCodexSessionIndex,
   reconcileGeminiSessionIndex,
+  reconcileOpenRouterSessionIndex,
   ensureProjectSkillLinks,
   getWorkspaceRootFromConfig,
   setWorkspaceRootInConfig
