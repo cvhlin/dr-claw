@@ -75,6 +75,10 @@ export default function AccountContent({ agent, authStatus, onLogin }) {
   const [isVerifyingOpenRouter, setIsVerifyingOpenRouter] = useState(false);
   const [openrouterVerifyResult, setOpenrouterVerifyResult] = useState(null);
 
+  const [openaiApiKey, setOpenaiApiKey] = useState('');
+  const [isVerifyingOpenAI, setIsVerifyingOpenAI] = useState(false);
+  const [openaiVerifyResult, setOpenaiVerifyResult] = useState(null);
+
   const handleVerifyCustomApi = async () => {
     setIsVerifying(true);
     setVerifyResult(null);
@@ -118,6 +122,28 @@ export default function AccountContent({ agent, authStatus, onLogin }) {
       setOpenrouterVerifyResult({ success: false, message: err.message });
     } finally {
       setIsVerifyingOpenRouter(false);
+    }
+  };
+
+  const handleVerifyOpenAIKey = async () => {
+    setIsVerifyingOpenAI(true);
+    setOpenaiVerifyResult(null);
+    try {
+      const res = await authenticatedFetch('/api/cli/codex/verify-api-key', {
+        method: 'POST',
+        body: JSON.stringify({ apiKey: openaiApiKey.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setOpenaiVerifyResult({ success: true, message: data.message || 'API key verified and saved.' });
+        setOpenaiApiKey('');
+      } else {
+        setOpenaiVerifyResult({ success: false, message: data.error || 'Invalid API key' });
+      }
+    } catch (err) {
+      setOpenaiVerifyResult({ success: false, message: err.message });
+    } finally {
+      setIsVerifyingOpenAI(false);
     }
   };
 
@@ -251,6 +277,53 @@ export default function AccountContent({ agent, authStatus, onLogin }) {
                     {verifyResult.message}
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {agent === 'codex' && (
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Key className="w-4 h-4 text-gray-500" />
+                <div className={`font-medium ${config.textClass}`}>OpenAI API Key</div>
+              </div>
+              <p className={`text-sm ${config.subtextClass} mb-3`}>
+                {authStatus?.authenticated
+                  ? 'Your API key is configured. Enter a new key below to replace it.'
+                  : 'Enter your OpenAI API key to use Codex. Get one at platform.openai.com/api-keys.'}
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm text-gray-600 dark:text-gray-400 block mb-1 flex items-center gap-1">
+                    <Key className="w-3.5 h-3.5" /> API Key
+                  </label>
+                  <Input
+                    type="password"
+                    placeholder="sk-..."
+                    value={openaiApiKey}
+                    onChange={e => setOpenaiApiKey(e.target.value)}
+                  />
+                </div>
+                <Button
+                  onClick={handleVerifyOpenAIKey}
+                  disabled={isVerifyingOpenAI || !openaiApiKey.trim()}
+                  size="sm"
+                  className={`${config.buttonClass} text-white w-full`}
+                >
+                  {isVerifyingOpenAI ? 'Verifying...' : 'Verify & Save Key'}
+                </Button>
+                {openaiVerifyResult && (
+                  <div className={`text-sm ${openaiVerifyResult.success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                    {openaiVerifyResult.message}
+                  </div>
+                )}
+                <div className="text-xs text-muted-foreground mt-2">
+                  <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+                    Get an API key at platform.openai.com
+                  </a>
+                  {' · '}
+                  <span>Used for Codex agent and voice transcription.</span>
+                </div>
               </div>
             </div>
           )}
